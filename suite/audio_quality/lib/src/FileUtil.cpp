@@ -19,6 +19,7 @@
 #include <errno.h>
 
 #include "Log.h"
+#include "Settings.h"
 #include "StringUtil.h"
 #include "FileUtil.h"
 
@@ -54,9 +55,14 @@ bool FileUtil::prepare(android::String8& dirPath)
         _LOGD_("mkdir of topdir failed, error %d", errno);
         return false;
     }
+    android::String8 reportTime;
+    if (reportTime.appendFormat("%04d_%02d_%02d_%02d_%02d_%02d", tm->tm_year + 1900,
+                tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec) != 0) {
+            return false;
+    }
+    Settings::Instance()->addSetting(Settings::EREPORT_TIME, reportTime);
     android::String8 path;
-    if (path.appendFormat("%s/%04d_%02d_%02d_%02d_%02d_%02d", reportTopDir,tm->tm_year + 1900,
-            tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec) != 0) {
+    if (path.appendFormat("%s/%s", reportTopDir, reportTime.string()) != 0) {
         return false;
     }
     result = mkdir(path.string(), S_IRWXU);
@@ -72,7 +78,12 @@ bool FileUtil::prepare(android::String8& dirPath)
 
 FileUtil::FileUtil()
 {
-
+    mBuffer = new char[DEFAULT_BUFFER_SIZE];
+    if (mBuffer == NULL) {
+        // cannot use ASSERT here, just crash
+        *(char*)0 = 0;
+    }
+    mBufferSize = DEFAULT_BUFFER_SIZE;
 }
 
 FileUtil::~FileUtil()
@@ -80,6 +91,7 @@ FileUtil::~FileUtil()
     if (mFile.is_open()) {
         mFile.close();
     }
+    delete[] mBuffer;
 }
 
 bool FileUtil::init(const char* fileName)
@@ -95,34 +107,48 @@ bool FileUtil::init(const char* fileName)
     return true;
 }
 
-bool FileUtil::doVprintf(bool fileOnly, int loglevel, const char *fmt, va_list ap)
+bool FileUtil::doVprintf(bool fileOnly, int logLevel, const char *fmt, va_list ap)
 {
     // prevent messed up log in multi-thread env. Still multi-line logs can be messed up.
     android::Mutex::Autolock lock(mWriteLock);
-    int start = 0;
-    if (loglevel != -1) {
-        mBuffer[0] = '0' + loglevel;
-        mBuffer[1] = '>';
-        start = 2;
-    }
-    int size;
-    size = vsnprintf(mBuffer + start, BUFFER_SIZE - start - 2, fmt, ap); // 2 for \n\0
-    if (size < 0) {
-        fprintf(stderr, "FileUtil::vprintf failed");
-        return false;
-    }
-    size += start;
-    mBuffer[size] = '\n';
-    size++;
-    mBuffer[size] = 0;
+    while (1) {
+        int start = 0;
+        if (logLevel != -1) {
+            mBuffer[0] = '0' + logLevel;
+            mBuffer[1] = '>';
+            start = 2;
+        }
+        int size;
+        size = vsnprintf(mBuffer + start, mBufferSize - start - 2, fmt, ap); // 2 for \n\0
+        if (size < 0) {
+            fprintf(stderr, "FileUtil::vprintf failed");
+            return false;
+        }
+        if ((size + start + 2) > mBufferSize) {
+            //default buffer does not fit, increase buffer size and retry
+            delete[] mBuffer;
+            mBuffer = new char[2 * size];
+            if (mBuffer == NULL) {
+                // cannot use ASSERT here, just crash
+                *(char*)0 = 0;
+            }
+            mBufferSize = 2 * size;
+            // re-try
+            continue;
+        }
+        size += start;
+        mBuffer[size] = '\n';
+        size++;
+        mBuffer[size] = 0;
 
-    if (!fileOnly) {
-        fprintf(stdout, "%s", mBuffer);
+        if (!fileOnly) {
+            fprintf(stdout, "%s", mBuffer);
+        }
+        if (mFile.is_open()) {
+            mFile<<mBuffer;
+        }
+        return true;
     }
-    if (mFile.is_open()) {
-        mFile<<mBuffer;
-    }
-    return true;
 }
 
 bool FileUtil::doPrintf(const char* fmt, ...)

@@ -24,7 +24,7 @@ class TestCase {
 
     private final String mName;
 
-    private final List<String> mTests = new ArrayList<String>();
+    private final List<Test> mTests = new ArrayList<Test>();
 
     public TestCase(String name) {
         mName = name;
@@ -34,11 +34,11 @@ class TestCase {
         return mName;
     }
 
-    public void addTest(String test) {
-        mTests.add(test);
+    public void addTest(String testName, int timeout) {
+        mTests.add(new Test(testName, timeout));
     }
 
-    public Collection<String> getTests() {
+    public Collection<Test> getTests() {
         return Collections.unmodifiableCollection(mTests);
     }
 }

@@ -18,6 +18,7 @@
         package="com.android.cts.holo">
 
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
 
     <application android:hardwareAccelerated="false">
         <uses-library android:name="android.test.runner" />
@@ -40,12 +41,12 @@
                 android:label="@string/pick_layout" />
 
         <activity android:name="android.holo.cts.ThemeTestActivity"
-                android:configChanges="keyboardHidden|orientation|screenSize"
+                android:configChanges="keyboardHidden|orientation|screenSize|mcc|mnc"
                 android:screenOrientation="nosensor"
                 android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <activity android:name="android.holo.cts.LayoutTestActivity"
-                android:configChanges="keyboardHidden|orientation|screenSize"
+                android:configChanges="keyboardHidden|orientation|screenSize|mcc|mnc"
                 android:screenOrientation="nosensor" />
 
         <activity android:name="android.holo.cts.BitmapDeletionActivity"
@@ -53,7 +54,7 @@
 
     </application>
     
-    <instrumentation android:name="android.test.InstrumentationTestRunner"
+    <instrumentation android:name="android.test.InstrumentationCtsTestRunner"
             android:targetPackage="com.android.cts.holo"
             android:label="CTS tests for the Holo theme" />
 

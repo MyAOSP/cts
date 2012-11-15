@@ -16,9 +16,9 @@
 
 package android.telephony.cts;
 
-
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.net.ConnectivityManager;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
@@ -29,6 +29,8 @@ import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
 import android.test.AndroidTestCase;
 
+import com.android.internal.telephony.PhoneConstants;
+
 import java.util.regex.Pattern;
 
 public class TelephonyManagerTest extends AndroidTestCase {
@@ -38,12 +40,14 @@ public class TelephonyManagerTest extends AndroidTestCase {
     private static final int TOLERANCE = 1000;
     private Looper mLooper;
     private PhoneStateListener mListener;
+    private static ConnectivityManager mCm;
 
     @Override
     protected void setUp() throws Exception {
         super.setUp();
         mTelephonyManager =
             (TelephonyManager)getContext().getSystemService(Context.TELEPHONY_SERVICE);
+        mCm = (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
     }
 
     @Override
@@ -165,12 +169,23 @@ public class TelephonyManagerTest extends AndroidTestCase {
                 break;
 
             case TelephonyManager.PHONE_TYPE_CDMA:
-                assertCdmaDeviceId(deviceId);
+                // LTE device is using IMEI as device id
+                if (mTelephonyManager.getLteOnCdmaMode() == PhoneConstants.LTE_ON_CDMA_TRUE) {
+                    assertGsmDeviceId(deviceId);
+                } else {
+                    assertCdmaDeviceId(deviceId);
+                }
                 break;
 
             case TelephonyManager.PHONE_TYPE_NONE:
-                assertSerialNumber();
-                assertMacAddressReported();
+                boolean nwSupported = mCm.isNetworkSupported(mCm.TYPE_WIFI);
+                if (nwSupported) {
+                    assertSerialNumber();
+                    assertMacAddressReported();
+                } else {
+                    nwSupported = mCm.isNetworkSupported(mCm.TYPE_ETHERNET);
+                    assertTrue(nwSupported);
+                }
                 break;
 
             default:

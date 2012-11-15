@@ -173,6 +173,8 @@ public class CtsConsole extends Console {
         helpBuilder.append("session\n");
         helpBuilder.append("Dump:\n");
         helpBuilder.append("  d/dump l/logs: dump the tradefed logs for all running invocations\n");
+        helpBuilder.append("Options:\n");
+        helpBuilder.append("  --disable-reboot : Do not reboot device after running some amount of tests.\n");
         return helpBuilder.toString();
     }
 
@@ -244,6 +246,11 @@ public class CtsConsole extends Console {
     }
 
     public static void main(String[] args) throws InterruptedException {
+        // change to PTS mode before anything else
+        String ptsMode = System.getProperty("PTS");
+        if ((ptsMode != null) && ptsMode.equals("1")) {
+            CtsBuildHelper.changeToPtsMode();
+        }
         Console console = new CtsConsole();
         Console.startConsole(console, args);
     }

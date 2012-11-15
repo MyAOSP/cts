@@ -18,4 +18,5 @@ package android.opengl.cts;
 public class Constants {
     public static final int SHADER = 1;
     public static final int PROGRAM = 2;
+    public static final int COLOR = 3;
 }

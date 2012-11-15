@@ -58,7 +58,7 @@ import java.util.List;
  */
 @LargeTest
 public class CameraTest extends ActivityInstrumentationTestCase2<CameraStubActivity> {
-    private String TAG = "CameraTest";
+    private static String TAG = "CameraTest";
     private static final String PACKAGE = "com.android.cts.stub";
     private static final boolean LOGV = false;
     private final String JPEG_PATH = Environment.getExternalStorageDirectory().getPath() +
@@ -78,8 +78,8 @@ public class CameraTest extends ActivityInstrumentationTestCase2<CameraStubActiv
     private int mCameraErrorCode = NO_ERROR;
     private boolean mAutoFocusSucceeded = false;
 
-    private static final int WAIT_FOR_COMMAND_TO_COMPLETE = 1500;  // Milliseconds.
-    private static final int WAIT_FOR_FOCUS_TO_COMPLETE = 3000;
+    private static final int WAIT_FOR_COMMAND_TO_COMPLETE = 5000;  // Milliseconds.
+    private static final int WAIT_FOR_FOCUS_TO_COMPLETE = 5000;
     private static final int WAIT_FOR_SNAPSHOT_TO_COMPLETE = 5000;
 
     private static final int FOCUS_AREA = 0;
@@ -177,6 +177,42 @@ public class CameraTest extends ActivityInstrumentationTestCase2<CameraStubActiv
         assertEquals("Got camera error callback.", NO_ERROR, mCameraErrorCode);
     }
 
+    // Align 'x' to 'to', which should be a power of 2
+    private static int align(int x, int to) {
+        return (x + (to-1)) & ~(to - 1);
+    }
+    private static int calculateBufferSize(int width, int height,
+                                           int format, int bpp) {
+
+        if (LOGV) {
+            Log.v(TAG, "calculateBufferSize: w=" + width + ",h=" + height
+            + ",f=" + format + ",bpp=" + bpp);
+        }
+
+        if (format == ImageFormat.YV12) {
+            /*
+            http://developer.android.com/reference/android/graphics/ImageFormat.html#YV12
+            */
+
+            int stride = align(width, 16);
+
+            int y_size = stride * height;
+            int c_stride = align(stride/2, 16);
+            int c_size = c_stride * height/2;
+            int size = y_size + c_size * 2;
+
+            if (LOGV) {
+                Log.v(TAG, "calculateBufferSize: YV12 size= " + size);
+            }
+
+            return size;
+
+        }
+        else {
+            return width * height * bpp / 8;
+        }
+    }
+
     //Implement the previewCallback
     private final class PreviewCallback
             implements android.hardware.Camera.PreviewCallback {
@@ -189,7 +225,8 @@ public class CameraTest extends ActivityInstrumentationTestCase2<CameraStubActiv
             Size size = camera.getParameters().getPreviewSize();
             int format = camera.getParameters().getPreviewFormat();
             int bitsPerPixel = ImageFormat.getBitsPerPixel(format);
-            if (size.width * size.height * bitsPerPixel / 8 != data.length) {
+            if (calculateBufferSize(size.width, size.height,
+                    format, bitsPerPixel) != data.length) {
                 Log.e(TAG, "Invalid frame size " + data.length + ". width=" + size.width
                         + ". height=" + size.height + ". bitsPerPixel=" + bitsPerPixel);
                 mPreviewCallbackResult = PREVIEW_CALLBACK_INVALID_FRAME_SIZE;
@@ -317,12 +354,16 @@ public class CameraTest extends ActivityInstrumentationTestCase2<CameraStubActiv
             Log.v(TAG, "Camera id=" + id);
             initializeMessageLooper(id);
             mCamera.startPreview();
-            subtestTakePictureByCamera();
+            subtestTakePictureByCamera(false, 0, 0);
             terminateMessageLooper();
         }
     }
 
-    private void subtestTakePictureByCamera() throws Exception {
+    private void subtestTakePictureByCamera(boolean isVideoSnapshot,
+            int videoWidth, int videoHeight) throws Exception {
+        int videoSnapshotMinArea =
+                videoWidth * videoHeight; // Temporary until new API definitions
+
         Size pictureSize = mCamera.getParameters().getPictureSize();
         mCamera.autoFocus(mAutoFocusCallback);
         assertTrue(waitForFocusDone());
@@ -336,8 +377,19 @@ public class CameraTest extends ActivityInstrumentationTestCase2<CameraStubActiv
         BitmapFactory.Options bmpOptions = new BitmapFactory.Options();
         bmpOptions.inJustDecodeBounds = true;
         BitmapFactory.decodeByteArray(mJpegData, 0, mJpegData.length, bmpOptions);
-        assertEquals(pictureSize.width, bmpOptions.outWidth);
-        assertEquals(pictureSize.height, bmpOptions.outHeight);
+        if (!isVideoSnapshot) {
+            assertEquals(pictureSize.width, bmpOptions.outWidth);
+            assertEquals(pictureSize.height, bmpOptions.outHeight);
+        } else {
+            int realArea = bmpOptions.outWidth * bmpOptions.outHeight;
+            if (LOGV) Log.v(TAG, "Video snapshot is " +
+                    bmpOptions.outWidth + " x " + bmpOptions.outHeight +
+                    ", video size is " + videoWidth + " x " + videoHeight);
+            assertTrue ("Video snapshot too small! Expected at least " +
+                    videoWidth + " x " + videoHeight + " (" +
+                    videoSnapshotMinArea/1000000. + " MP)",
+                    realArea >= videoSnapshotMinArea);
+        }
     }
 
     @UiThreadTest
@@ -705,12 +757,13 @@ public class CameraTest extends ActivityInstrumentationTestCase2<CameraStubActiv
         for (int id = 0; id < nCameras; id++) {
             Log.v(TAG, "Camera id=" + id);
             initializeMessageLooper(id);
-            testJpegThumbnailSizeByCamera(false);
+            testJpegThumbnailSizeByCamera(false, 0, 0);
             terminateMessageLooper();
         }
     }
 
-    private void testJpegThumbnailSizeByCamera(boolean recording) throws Exception {
+    private void testJpegThumbnailSizeByCamera(boolean recording,
+            int recordingWidth, int recordingHeight) throws Exception {
         // Thumbnail size parameters should have valid values.
         Parameters p = mCamera.getParameters();
         Size size = p.getJpegThumbnailSize();
@@ -731,8 +784,15 @@ public class CameraTest extends ActivityInstrumentationTestCase2<CameraStubActiv
         BitmapFactory.Options bmpOptions = new BitmapFactory.Options();
         bmpOptions.inJustDecodeBounds = true;
         BitmapFactory.decodeByteArray(thumb, 0, thumb.length, bmpOptions);
-        assertEquals(size.width, bmpOptions.outWidth);
-        assertEquals(size.height, bmpOptions.outHeight);
+        if (!recording) {
+            assertEquals(size.width, bmpOptions.outWidth);
+            assertEquals(size.height, bmpOptions.outHeight);
+        } else {
+            assertTrue(bmpOptions.outWidth >= recordingWidth ||
+                    bmpOptions.outWidth == size.width);
+            assertTrue(bmpOptions.outHeight >= recordingHeight ||
+                    bmpOptions.outHeight == size.height);
+        }
 
         // Test no thumbnail case.
         p.setJpegThumbnailSize(0, 0);
@@ -801,6 +861,9 @@ public class CameraTest extends ActivityInstrumentationTestCase2<CameraStubActiv
         exif = new ExifInterface(JPEG_PATH);
         checkGpsDataNull(exif);
         assertBitmapAndJpegSizeEqual(mJpegData, exif);
+        // Reset the rotation to prevent from affecting other tests.
+        parameters.setRotation(0);
+        mCamera.setParameters(parameters);
     }
 
     private void assertBitmapAndJpegSizeEqual(byte[] jpegData, ExifInterface exif) {
@@ -1564,7 +1627,8 @@ public class CameraTest extends ActivityInstrumentationTestCase2<CameraStubActiv
             int format = camera.getParameters().getPreviewFormat();
             int bitsPerPixel = ImageFormat.getBitsPerPixel(format);
             if (!expectedPreviewSize.equals(size) ||
-                    size.width * size.height * bitsPerPixel / 8 != data.length) {
+                    calculateBufferSize(size.width, size.height,
+                        format, bitsPerPixel) != data.length) {
                 Log.e(TAG, "Expected preview width=" + expectedPreviewSize.width + ", height="
                         + expectedPreviewSize.height + ". Actual width=" + size.width + ", height="
                         + size.height);
@@ -2707,51 +2771,158 @@ public class CameraTest extends ActivityInstrumentationTestCase2<CameraStubActiv
         }
     }
 
+    private static final int[] mCamcorderProfileList = {
+        CamcorderProfile.QUALITY_1080P,
+        CamcorderProfile.QUALITY_480P,
+        CamcorderProfile.QUALITY_720P,
+        CamcorderProfile.QUALITY_CIF,
+        CamcorderProfile.QUALITY_HIGH,
+        CamcorderProfile.QUALITY_LOW,
+        CamcorderProfile.QUALITY_QCIF,
+        CamcorderProfile.QUALITY_QVGA,
+    };
+
     private void testVideoSnapshotByCamera(int cameraId) throws Exception {
         initializeMessageLooper(cameraId);
         Camera.Parameters parameters = mCamera.getParameters();
+        terminateMessageLooper();
         if (!parameters.isVideoSnapshotSupported()) {
-            terminateMessageLooper();
             return;
         }
 
         SurfaceHolder holder = getActivity().getSurfaceView().getHolder();
 
-        // Set the preview size.
-        CamcorderProfile profile = CamcorderProfile.get(cameraId,
-                CamcorderProfile.QUALITY_LOW);
-        setPreviewSizeByProfile(parameters, profile);
-
-        // Set the biggest picture size.
-        Size biggestSize = mCamera.new Size(-1, -1);
-        for (Size size: parameters.getSupportedPictureSizes()) {
-            if (biggestSize.width < size.width) {
-                biggestSize = size;
+        for (int profileId: mCamcorderProfileList) {
+            if (!CamcorderProfile.hasProfile(cameraId, profileId)) {
+                continue;
             }
-        }
-        parameters.setPictureSize(biggestSize.width, biggestSize.height);
+            initializeMessageLooper(cameraId);
+            // Set the preview size.
+            CamcorderProfile profile = CamcorderProfile.get(cameraId,
+                    profileId);
+            setPreviewSizeByProfile(parameters, profile);
 
-        mCamera.setParameters(parameters);
-        mCamera.startPreview();
-        mCamera.unlock();
-        MediaRecorder recorder = new MediaRecorder();
-        try {
-            recorder.setCamera(mCamera);
-            recorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
-            recorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
-            recorder.setProfile(profile);
-            recorder.setOutputFile("/dev/null");
-            recorder.setPreviewDisplay(holder.getSurface());
-            recorder.prepare();
-            recorder.start();
-            subtestTakePictureByCamera();
-            testJpegExifByCamera(true);
-            testJpegThumbnailSizeByCamera(true);
-            recorder.stop();
-        } finally {
-            recorder.release();
-            mCamera.lock();
+            // Set the biggest picture size.
+            Size biggestSize = mCamera.new Size(-1, -1);
+            for (Size size: parameters.getSupportedPictureSizes()) {
+                if (biggestSize.width < size.width) {
+                    biggestSize = size;
+                }
+            }
+            parameters.setPictureSize(biggestSize.width, biggestSize.height);
+
+            mCamera.setParameters(parameters);
+            mCamera.startPreview();
+            mCamera.unlock();
+            MediaRecorder recorder = new MediaRecorder();
+            try {
+                recorder.setCamera(mCamera);
+                recorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
+                recorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
+                recorder.setProfile(profile);
+                recorder.setOutputFile("/dev/null");
+                recorder.setPreviewDisplay(holder.getSurface());
+                recorder.prepare();
+                recorder.start();
+                subtestTakePictureByCamera(true,
+                        profile.videoFrameWidth, profile.videoFrameHeight);
+                testJpegExifByCamera(true);
+                testJpegThumbnailSizeByCamera(true,
+                        profile.videoFrameWidth, profile.videoFrameHeight);
+                Thread.sleep(2000);
+                recorder.stop();
+            } finally {
+                recorder.release();
+                mCamera.lock();
+            }
+            mCamera.stopPreview();
+            terminateMessageLooper();
         }
+    }
+
+    public void testPreviewCallbackWithPicture() throws Exception {
+        int nCameras = Camera.getNumberOfCameras();
+        for (int id = 0; id < nCameras; id++) {
+            Log.v(TAG, "Camera id=" + id);
+            testPreviewCallbackWithPictureByCamera(id);
+        }
+    }
+
+    private void testPreviewCallbackWithPictureByCamera(int cameraId)
+            throws Exception {
+        initializeMessageLooper(cameraId);
+
+        SimplePreviewStreamCb callback = new SimplePreviewStreamCb(1);
+        mCamera.setPreviewCallback(callback);
+
+        Log.v(TAG, "Starting preview");
+        mCamera.startPreview();
+
+        // Wait until callbacks are flowing
+        for (int i = 0; i < 30; i++) {
+            assertTrue("testPreviewCallbackWithPicture: Not receiving preview callbacks!",
+                    mPreviewDone.block( WAIT_FOR_COMMAND_TO_COMPLETE ) );
+            mPreviewDone.close();
+        }
+
+        // Now take a picture
+        Log.v(TAG, "Taking picture now");
+
+        Size pictureSize = mCamera.getParameters().getPictureSize();
+        mCamera.takePicture(mShutterCallback, mRawPictureCallback,
+                mJpegPictureCallback);
+
+        waitForSnapshotDone();
+
+        assertTrue("Shutter callback not received", mShutterCallbackResult);
+        assertTrue("Raw picture callback not received", mRawPictureCallbackResult);
+        assertTrue("Jpeg picture callback not received", mJpegPictureCallbackResult);
+        assertNotNull(mJpegData);
+        BitmapFactory.Options bmpOptions = new BitmapFactory.Options();
+        bmpOptions.inJustDecodeBounds = true;
+        BitmapFactory.decodeByteArray(mJpegData, 0, mJpegData.length, bmpOptions);
+        assertEquals(pictureSize.width, bmpOptions.outWidth);
+        assertEquals(pictureSize.height, bmpOptions.outHeight);
+
+        // Restart preview, confirm callbacks still happen
+        Log.v(TAG, "Restarting preview");
+        mCamera.startPreview();
+
+        for (int i = 0; i < 30; i++) {
+            assertTrue("testPreviewCallbackWithPicture: Not receiving preview callbacks!",
+                    mPreviewDone.block( WAIT_FOR_COMMAND_TO_COMPLETE ) );
+            mPreviewDone.close();
+        }
+
+        mCamera.stopPreview();
+
         terminateMessageLooper();
     }
+
+    public void testEnableShutterSound() throws Exception {
+        int nCameras = Camera.getNumberOfCameras();
+        for (int id = 0; id < nCameras; id++) {
+            Log.v(TAG, "Camera id=" + id);
+            testEnableShutterSoundByCamera(id);
+        }
+    }
+
+    private void testEnableShutterSoundByCamera(int id) throws Exception {
+        CameraInfo info = new CameraInfo();
+
+        Camera.getCameraInfo(id, info);
+
+        initializeMessageLooper(id);
+
+        boolean result;
+        Log.v(TAG, "testEnableShutterSoundByCamera: canDisableShutterSound: " +
+                info.canDisableShutterSound);
+        result = mCamera.enableShutterSound(false);
+        assertTrue(result == info.canDisableShutterSound);
+        result = mCamera.enableShutterSound(true);
+        assertTrue(result);
+
+        terminateMessageLooper();
+    }
+
 }

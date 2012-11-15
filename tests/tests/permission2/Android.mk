@@ -19,7 +19,9 @@ include $(CLEAR_VARS)
 
 LOCAL_MODULE_TAGS := tests
 
-LOCAL_JAVA_LIBRARIES := android.test.runner
+LOCAL_JAVA_LIBRARIES := android.test.runner telephony-common mms-common
+
+LOCAL_STATIC_JAVA_LIBRARIES := ctstestrunner
 
 LOCAL_SRC_FILES := $(call all-java-files-under, src)
 

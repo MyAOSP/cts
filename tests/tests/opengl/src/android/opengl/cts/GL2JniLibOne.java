@@ -18,11 +18,12 @@ package android.opengl.cts;
 
 public class GL2JniLibOne {
      static {
-         System.loadLibrary("opengltest");
+         System.loadLibrary("opengltest_jni");
      }
 
-     public static native void init(int category, int subcategory);
+     public static native void init(int category, int subcategory, int width, int height);
      public static native void step();
+     public static native float[] draw(int category, int subcategory, float[] color);
 
      public static native int getAttachShaderError();
      public static native int getLoadShaderError();

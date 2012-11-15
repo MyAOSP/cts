@@ -36,6 +36,7 @@ class Test extends AbstractXmlPullParser {
     private static final String RESULT_ATTR = "result";
     private static final String SCENE_TAG = "FailedScene";
     private static final String STACK_TAG = "StackTrace";
+    private static final String DETAILS_TAG = "Details";
 
     private String mName;
     private CtsTestStatus mResult;
@@ -43,6 +44,8 @@ class Test extends AbstractXmlPullParser {
     private String mEndTime;
     private String mMessage;
     private String mStackTrace;
+    // details passed from pts
+    private String mDetails;
 
     /**
      * Create an empty {@link Test}
@@ -84,6 +87,10 @@ class Test extends AbstractXmlPullParser {
         return mMessage;
     }
 
+    public void setMessage(String message) {
+        mMessage = message;
+    }
+
     public String getStartTime() {
         return mStartTime;
     }
@@ -100,6 +107,14 @@ class Test extends AbstractXmlPullParser {
 
         mStackTrace = sanitizeStackTrace(stackTrace);
         mMessage = getFailureMessageFromStackTrace(mStackTrace);
+    }
+
+    public String getDetails() {
+        return mDetails;
+    }
+
+    public void setDetails(String details) {
+        mDetails = details;
     }
 
     public void updateEndTime() {
@@ -131,6 +146,11 @@ class Test extends AbstractXmlPullParser {
                 serializer.startTag(CtsXmlResultReporter.ns, STACK_TAG);
                 serializer.text(mStackTrace);
                 serializer.endTag(CtsXmlResultReporter.ns, STACK_TAG);
+            }
+            if (mDetails != null) {
+                serializer.startTag(CtsXmlResultReporter.ns, DETAILS_TAG);
+                serializer.text(mDetails);
+                serializer.endTag(CtsXmlResultReporter.ns, DETAILS_TAG);
             }
             serializer.endTag(CtsXmlResultReporter.ns, SCENE_TAG);
         }

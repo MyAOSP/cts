@@ -32,7 +32,7 @@ public class Settings_SecureTest extends AndroidTestCase {
      * Setting that will have a string value to trigger SettingNotFoundException caused by
      * NumberFormatExceptions for getInt, getFloat, and getLong.
      */
-    private static final String STRING_VALUE_SETTING = Secure.ENABLED_ACCESSIBILITY_SERVICES;
+    private static final String STRING_VALUE_SETTING = Secure.ANDROID_ID;
 
     private ContentResolver cr;
 
@@ -154,6 +154,6 @@ public class Settings_SecureTest extends AndroidTestCase {
 
     public void testUnknownSourcesOffByDefault() throws SettingNotFoundException {
         assertEquals("Device should not ship with 'Unknown Sources' enabled by default.",
-                0, Secure.getInt(cr, Settings.Secure.INSTALL_NON_MARKET_APPS));
+                0, Settings.Global.getInt(cr, Settings.Global.INSTALL_NON_MARKET_APPS));
     }
 }

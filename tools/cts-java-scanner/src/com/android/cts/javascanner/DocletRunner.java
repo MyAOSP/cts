@@ -65,17 +65,20 @@ class DocletRunner {
         List<String> sourcePath = new ArrayList<String>();
         sourcePath.add("./frameworks/base/core/java");
         sourcePath.add("./frameworks/base/test-runner/src");
-        sourcePath.add("./libcore/junit/src/main/java");
+        sourcePath.add("./external/junit/src");
         sourcePath.add("./development/tools/hosttestlib/src");
         sourcePath.add("./libcore/dalvik/src/main/java");
         sourcePath.add("./cts/tests/src");
+        // PTS adds PtsAndroidTestCase
+        sourcePath.add("./cts/suite/pts/deviceTests/ptsutil/src");
+        sourcePath.add("./cts/libs/util/src");
         sourcePath.add(sourceDir.toString());
         return join(sourcePath, ":");
     }
 
     private String getClassPath() {
         List<String> classPath = new ArrayList<String>();
-        classPath.add("./prebuilt/common/tradefed/tradefed-prebuilt.jar");
+        classPath.add("./prebuilts/misc/common/tradefed/tradefed-prebuilt.jar");
         return join(classPath, ":");
     }
 

@@ -165,11 +165,100 @@ public class FileSystemPermissionTest extends AndroidTestCase {
         assertFalse(f.canRead());
         assertFalse(f.canWrite());
         assertFalse(f.canExecute());
+
+        assertFileOwnedBy(f, "nfc");
+        assertFileOwnedByGroup(f, "nfc");
+    }
+
+    @MediumTest
+    public void testBcm2079xSane() throws Exception {
+        File f = new File("/dev/bcm2079x");
+        assertFalse(f.canRead());
+        assertFalse(f.canWrite());
+        assertFalse(f.canExecute());
+
+        assertFileOwnedBy(f, "nfc");
+        assertFileOwnedByGroup(f, "nfc");
+    }
+
+    @MediumTest
+    public void testBcm2079xi2cSane() throws Exception {
+        File f = new File("/dev/bcm2079x-i2c");
+        assertFalse(f.canRead());
+        assertFalse(f.canWrite());
+        assertFalse(f.canExecute());
+
+        assertFileOwnedBy(f, "nfc");
+        assertFileOwnedByGroup(f, "nfc");
+    }
+
+    /**
+     * Assert that a file is owned by a specific owner. This is a noop if the
+     * file does not exist.
+     *
+     * @param file The file to check.
+     * @param expectedOwner The owner of the file.
+     */
+    private static void assertFileOwnedBy(File file, String expectedOwner) {
+        FileUtils.FileStatus status = new FileUtils.FileStatus();
+        String path = file.getAbsolutePath();
+        if (file.exists() && FileUtils.getFileStatus(path, status, true)) {
+            String actualOwner = FileUtils.getUserName(status.uid);
+            if (!expectedOwner.equals(actualOwner)) {
+                String msg = String.format("Wrong owner. Expected '%s', but found '%s' for %s.",
+                        expectedOwner, actualOwner, path);
+                fail(msg);
+            }
+        }
+    }
+
+    /**
+     * Assert that a file is owned by a specific group. This is a noop if the
+     * file does not exist.
+     *
+     * @param file The file to check.
+     * @param expectedGroup The owner group of the file.
+     */
+    private static void assertFileOwnedByGroup(File file, String expectedGroup) {
+        FileUtils.FileStatus status = new FileUtils.FileStatus();
+        String path = file.getAbsolutePath();
+        if (file.exists() && FileUtils.getFileStatus(path, status, true)) {
+            String actualGroup = FileUtils.getGroupName(status.gid);
+            if (!expectedGroup.equals(actualGroup)) {
+                String msg = String.format("Wrong group. Expected '%s', but found '%s' for %s.",
+                        expectedGroup, actualGroup, path);
+                fail(msg);
+            }
+        }
     }
 
     @MediumTest
     public void testTtyO3Sane() throws Exception {
         File f = new File("/dev/ttyO3");
+        assertFalse(f.canRead());
+        assertFalse(f.canWrite());
+        assertFalse(f.canExecute());
+    }
+
+    @MediumTest
+    public void testDataMediaSane() throws Exception {
+        final File f = new File("/data/media");
+        assertFalse(f.canRead());
+        assertFalse(f.canWrite());
+        assertFalse(f.canExecute());
+    }
+
+    @MediumTest
+    public void testMntShellSane() throws Exception {
+        final File f = new File("/mnt/shell");
+        assertFalse(f.canRead());
+        assertFalse(f.canWrite());
+        assertFalse(f.canExecute());
+    }
+
+    @MediumTest
+    public void testMntSecureSane() throws Exception {
+        final File f = new File("/mnt/secure");
         assertFalse(f.canRead());
         assertFalse(f.canWrite());
         assertFalse(f.canExecute());
@@ -218,6 +307,9 @@ public class FileSystemPermissionTest extends AndroidTestCase {
                     "/app-cache/ciq/socket",
                     "/cache/fotapkg",
                     "/cache/fotapkg/tmp",
+                    "/data/_SamsungBnR_",
+                    "/data/_SamsungBnR_/BR",
+                    "/data/2nd-init",
                     "/data/amit",
                     "/data/anr",
                     "/data/app",
@@ -228,7 +320,9 @@ public class FileSystemPermissionTest extends AndroidTestCase {
                     "/data/btips",
                     "/data/btips/TI",
                     "/data/btips/TI/opp",
+                    "/data/cache",
                     "/data/calibration",
+                    "/data/clipboard",
                     "/data/clp",
                     "/data/dalvik-cache",
                     "/data/data",
@@ -266,10 +360,18 @@ public class FileSystemPermissionTest extends AndroidTestCase {
                     "/data/drm/rights",
                     "/data/dump",
                     "/data/emt",
+                    "/data/factory",
+                    "/data/fics",
+                    "/data/fics/dev",
                     "/data/fota",
+                    "/data/gps",
+                    "/data/gps/log",
+                    "/data/gps/var",
+                    "/data/gps/var/run",
                     "/data/gpscfg",
                     "/data/hwvefs",
                     "/data/htcfs",
+                    "/data/img",
                     "/data/install",
                     "/data/internal-device",
                     "/data/internal-device/DCIM",
@@ -291,11 +393,15 @@ public class FileSystemPermissionTest extends AndroidTestCase {
                     "/data/local/tmp",
                     "/data/local/tmp/com.nuance.android.vsuite.vsuiteapp",
                     "/data/log",
+                    "/data/logger",
                     "/data/lost+found",
                     "/data/misc",
                     "/data/misc/bluetooth",
                     "/data/misc/dhcp",
                     "/data/misc/lockscreen",
+                    "/data/misc/webwidgets",
+                    "/data/misc/webwidgets/chess",
+                    "/data/misc/widgets",
                     "/data/misc/wifi",
                     "/data/misc/wifi/sockets",
                     "/data/misc/wimax",
@@ -304,7 +410,9 @@ public class FileSystemPermissionTest extends AndroidTestCase {
                     "/data/misc/wpa_supplicant",
                     "/data/nv",
                     "/data/nvcam",
+                    "/data/panic",
                     "/data/panicreports",
+                    "/data/preinstall_md5",
                     "/data/property",
                     "/data/radio",
                     "/data/secure",
@@ -314,12 +422,14 @@ public class FileSystemPermissionTest extends AndroidTestCase {
                     "/data/simcom/btadd",
                     "/data/simcom/simlog",
                     "/data/system",
+                    "/data/tmp",
                     "/data/tombstones",
                     "/data/tpapi",
                     "/data/tpapi/etc",
                     "/data/tpapi/etc/tpa",
                     "/data/tpapi/etc/tpa/persistent",
                     "/data/tpapi/user.bin",
+                    "/data/vpnch",
                     "/data/wapi",
                     "/data/wifi",
                     "/data/wimax",
@@ -329,6 +439,7 @@ public class FileSystemPermissionTest extends AndroidTestCase {
                     "/data/xt9",
                     "/dbdata/databases",
                     "/efs/.android",
+                    "/mnt/sdcard",
                     "/mnt/usbdrive",
                     "/mnt_ext",
                     "/mnt_ext/badablk2",

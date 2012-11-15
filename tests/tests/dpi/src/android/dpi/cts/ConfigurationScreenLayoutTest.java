@@ -24,6 +24,7 @@ import android.content.res.Configuration;
 import android.test.ActivityInstrumentationTestCase2;
 import android.util.DisplayMetrics;
 import android.view.Display;
+import android.view.ViewConfiguration;
 import android.view.WindowManager;
 
 public class ConfigurationScreenLayoutTest

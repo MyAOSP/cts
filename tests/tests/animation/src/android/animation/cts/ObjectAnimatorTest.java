@@ -20,7 +20,6 @@ import android.animation.ArgbEvaluator;
 import android.animation.ObjectAnimator;
 import android.animation.PropertyValuesHolder;
 import android.animation.ValueAnimator;
-import android.os.SystemClock;
 import android.test.ActivityInstrumentationTestCase2;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.Interpolator;
@@ -250,5 +249,3 @@ public class ObjectAnimatorTest extends
         this.runTestOnUiThread(mAnimationRunnable);
     }
 }
-
-

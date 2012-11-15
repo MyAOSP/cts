@@ -18,13 +18,15 @@ cts_security_apps_list := \
 	CtsExternalStorageApp \
 	CtsInstrumentationAppDiffCert \
 	CtsPermissionDeclareApp \
+	CtsPermissionDeclareAppCompat \
 	CtsSharedUidInstall \
 	CtsSharedUidInstallDiffCert \
 	CtsSimpleAppInstall \
 	CtsSimpleAppInstallDiffCert \
 	CtsTargetInstrumentationApp \
 	CtsUsePermissionDiffCert \
-	CtsWriteExternalStorageApp
+	CtsWriteExternalStorageApp \
+	CtsMultiUserStorageApp
 
 cts_support_packages := \
 	CtsAccelerationTestStubs \
@@ -47,19 +49,17 @@ CTS_TEST_CASE_LIST := \
 	$(cts_support_packages) \
 	$(cts_external_packages)
 
-# Temporarily blacklisted packages
-#   CtsWebkitSecurityTestCases \
-
 # Test packages that require an associated test package XML.
 cts_test_packages := \
 	CtsAccelerationTestCases \
-	CtsAccessibilityServiceTestCases \
 	CtsAccountManagerTestCases \
+	CtsAccessibilityServiceTestCases \
 	CtsAccessibilityTestCases \
 	CtsAdminTestCases \
 	CtsAnimationTestCases \
 	CtsAppTestCases \
 	CtsBluetoothTestCases \
+	CtsCalendarcommon2TestCases \
 	CtsContentTestCases \
 	CtsDatabaseTestCases \
 	CtsDpiTestCases \

@@ -29,6 +29,7 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
@@ -46,7 +47,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
+import java.lang.InterruptedException;
+import java.lang.System;
+import java.lang.Thread;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -131,6 +136,21 @@ public class CtsTest implements IDeviceTest, IResumableTest, IShardableTest, IBu
     @Option(name = RUN_KNOWN_FAILURES_OPTION, shortName = 'k', description =
         "run tests including known failures")
     private boolean mIncludeKnownFailures;
+
+    @Option(name = "disable-reboot", description =
+            "Do not reboot device after running some amount of tests. Default behavior is to reboot.")
+    private boolean mDisableReboot = false;
+
+    @Option(name = "reboot-wait-time", description =
+            "Additional wait time in ms after boot complete.")
+    private int mRebootWaitTimeMSec = 2 * 60 * 1000;
+
+    @Option(name = "reboot-interval", description =
+            "Interval between each reboot in min.")
+    private int mRebootIntervalMin = 30;
+
+
+    private long mPrevRebootTime; // last reboot time
 
     /** data structure for a {@link IRemoteTest} and its known tests */
     class TestPackage {
@@ -330,6 +350,11 @@ public class CtsTest implements IDeviceTest, IResumableTest, IShardableTest, IBu
             // always collect the device info, even for resumed runs, since test will likely be
             // running on a different device
             collectDeviceInfo(getDevice(), mCtsBuild, listener);
+            if (mRemainingTestPkgs.size() > 1 && !mDisableReboot) {
+                Log.i(LOG_TAG, "Initial reboot for multiple packages");
+                rebootDevice();
+            }
+            mPrevRebootTime = System.currentTimeMillis();
 
             while (!mRemainingTestPkgs.isEmpty()) {
                 TestPackage knownTests = mRemainingTestPkgs.get(0);
@@ -345,6 +370,12 @@ public class CtsTest implements IDeviceTest, IResumableTest, IShardableTest, IBu
                 forwardPackageDetails(knownTests.getPackageDef(), listener);
                 test.run(filter);
                 mRemainingTestPkgs.remove(0);
+                if (mRemainingTestPkgs.size() > 0) {
+                    rebootIfNecessary(knownTests, mRemainingTestPkgs.get(0));
+                    // remove artifacts like status bar from the previous test.
+                    // But this cannot dismiss dialog popped-up.
+                    changeToHomeScreen();
+                }
             }
 
             if (mScreenshot) {
@@ -363,6 +394,66 @@ public class CtsTest implements IDeviceTest, IResumableTest, IShardableTest, IBu
         }
     }
 
+    private void rebootIfNecessary(TestPackage testFinished, TestPackage testToRun)
+            throws DeviceNotAvailableException {
+        // If there comes spurious failure like INJECT_EVENTS for a package,
+        // reboot it before running it.
+        // Also reboot after package which is know to leave pop-up behind
+        final List<String> rebootAfterList = Arrays.asList("CtsMediaTestCases");
+        final List<String> rebootBeforeList = Arrays.asList("CtsAnimationTestCases",
+                "CtsGraphicsTestCases",
+                "CtsViewTestCases",
+                "CtsWidgetTestCases" );
+        long intervalInMSec = mRebootIntervalMin * 60 * 1000;
+        if (!mDisableReboot) {
+            long currentTime = System.currentTimeMillis();
+            if (((currentTime - mPrevRebootTime) > intervalInMSec) ||
+                    rebootAfterList.contains(testFinished.getPackageDef().getName()) ||
+                    rebootBeforeList.contains(testToRun.getPackageDef().getName()) ) {
+                Log.i(LOG_TAG,
+                        String.format("Rebooting after running package %s, before package %s",
+                                testFinished.getPackageDef().getName(),
+                                testToRun.getPackageDef().getName()));
+                rebootDevice();
+                mPrevRebootTime = System.currentTimeMillis();
+            }
+        }
+    }
+
+    private void rebootDevice() throws DeviceNotAvailableException {
+        final int TIMEOUT_MS = 4 * 60 * 1000;
+        TestDeviceOptions options = mDevice.getOptions();
+        // store default value and increase time-out for reboot
+        int rebootTimeout = options.getRebootTimeout();
+        long onlineTimeout = options.getOnlineTimeout();
+        options.setRebootTimeout(TIMEOUT_MS);
+        options.setOnlineTimeout(TIMEOUT_MS);
+        mDevice.setOptions(options);
+
+        mDevice.reboot();
+
+        // restore default values
+        options.setRebootTimeout(rebootTimeout);
+        options.setOnlineTimeout(onlineTimeout);
+        mDevice.setOptions(options);
+        Log.i(LOG_TAG, "Rebooting done");
+        try {
+            Thread.sleep(mRebootWaitTimeMSec);
+        } catch (InterruptedException e) {
+            Log.i(LOG_TAG, "Boot wait interrupted");
+        }
+    }
+
+    private void changeToHomeScreen() throws DeviceNotAvailableException {
+        final String homeCmd = "input keyevent 3";
+
+        mDevice.executeShellCommand(homeCmd);
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            //ignore
+        }
+    }
     /**
      * Build the list of test packages to run
      */

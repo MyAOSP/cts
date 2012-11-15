@@ -122,6 +122,8 @@ public class AccessibilityNodeInfoTest extends AndroidTestCase {
         info.addAction(AccessibilityNodeInfo.ACTION_CLEAR_FOCUS);
         info.setAccessibilityFocused(true);
         info.setMovementGranularities(AccessibilityNodeInfo.MOVEMENT_GRANULARITY_LINE);
+        info.setLabeledBy(new View(getContext()));
+        info.setLabelFor(new View(getContext()));
     }
 
     /**

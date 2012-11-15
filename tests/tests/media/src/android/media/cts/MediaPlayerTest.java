@@ -23,15 +23,20 @@ import android.content.res.AssetFileDescriptor;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
+import android.media.MediaMetadataRetriever;
+import android.media.TimedText;
 import android.media.audiofx.AudioEffect;
 import android.media.audiofx.Visualizer;
 import android.net.Uri;
 import android.os.Environment;
 import android.os.PowerManager;
 import android.os.SystemClock;
+import android.util.Log;
 
 import java.io.File;
+import java.util.StringTokenizer;
 import java.util.UUID;
+import java.util.Vector;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -43,14 +48,33 @@ import java.util.concurrent.CountDownLatch;
  */
 public class MediaPlayerTest extends MediaPlayerTestBase {
 
-    private static final String RECORDED_FILE =
-                new File(Environment.getExternalStorageDirectory(),
-                "record.out").getAbsolutePath();
+    private String RECORDED_FILE;
+    private static final String LOG_TAG = "MediaPlayerTest";
 
     private static final int  RECORDED_VIDEO_WIDTH  = 176;
     private static final int  RECORDED_VIDEO_HEIGHT = 144;
     private static final long RECORDED_DURATION_MS  = 3000;
+    private Vector<Integer> mTimedTextTrackIndex = new Vector<Integer>();
+    private int mSelectedTimedTextIndex;
+    private Monitor mOnTimedTextCalled = new Monitor();
 
+    private File mOutFile;
+
+    @Override
+    protected void setUp() throws Exception {
+        super.setUp();
+        RECORDED_FILE = new File(Environment.getExternalStorageDirectory(),
+                "mediaplayer_record.out").getAbsolutePath();
+        mOutFile = new File(RECORDED_FILE);
+    }
+
+    @Override
+    protected void tearDown() throws Exception {
+        super.tearDown();
+        if (mOutFile != null && mOutFile.exists()) {
+            mOutFile.delete();
+        }
+    }
     public void testPlayNullSource() throws Exception {
         try {
             mMediaPlayer.setDataSource((String) null);
@@ -397,6 +421,7 @@ public class MediaPlayerTest extends MediaPlayerTestBase {
         checkOrientation(angle);
         recordVideo(width, height, angle, file, durationMs);
         checkDisplayedVideoSize(width, height, angle, file);
+        checkVideoRotationAngle(angle, file);
     }
 
     private void checkOrientation(int angle) throws Exception {
@@ -436,6 +461,17 @@ public class MediaPlayerTest extends MediaPlayerTestBase {
             displayHeight = w;
         }
         playVideoTest(file, displayWidth, displayHeight);
+    }
+
+    private void checkVideoRotationAngle(int angle, String file) {
+        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+        retriever.setDataSource(file);
+        String rotation = retriever.extractMetadata(
+                    MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION);
+        retriever.release();
+        retriever = null;
+        assertNotNull(rotation);
+        assertEquals(Integer.parseInt(rotation), angle);
     }
 
     public void testLocalVideo_MP4_H264_480x360_500kbps_25fps_AAC_Stereo_128kbps_44110Hz()
@@ -622,6 +658,170 @@ public class MediaPlayerTest extends MediaPlayerTestBase {
             throws Exception {
         playVideoTest(
                 R.raw.video_176x144_3gp_h263_300kbps_25fps_aac_stereo_128kbps_22050hz, 176, 144);
+    }
+
+    private void readTimedTextTracks() throws Exception {
+        mTimedTextTrackIndex.clear();
+        MediaPlayer.TrackInfo[] trackInfos = mMediaPlayer.getTrackInfo();
+        if (trackInfos == null || trackInfos.length == 0) {
+            return;
+        }
+        for (int i = 0; i < trackInfos.length; ++i) {
+            if (trackInfos[i] == null) continue;
+            if (trackInfos[i].getTrackType() ==
+                 MediaPlayer.TrackInfo.MEDIA_TRACK_TYPE_TIMEDTEXT) {
+                mTimedTextTrackIndex.add(i);
+            }
+        }
+    }
+
+    private int getTimedTextTrackCount() {
+        return mTimedTextTrackIndex.size();
+    }
+
+    private void selectSubtitleTrack(int index) throws Exception {
+        int trackIndex = mTimedTextTrackIndex.get(index);
+        mMediaPlayer.selectTrack(trackIndex);
+        mSelectedTimedTextIndex = index;
+    }
+
+    private void deselectSubtitleTrack(int index) throws Exception {
+        int trackIndex = mTimedTextTrackIndex.get(index);
+        mMediaPlayer.deselectTrack(trackIndex);
+        if (mSelectedTimedTextIndex == index) {
+            mSelectedTimedTextIndex = -1;
+        }
+    }
+
+    public void testDeselectTrack() throws Exception {
+        loadResource(R.raw.testvideo_with_2_subtitles);
+        loadSubtitleSource(R.raw.test_subtitle1_srt);
+        readTimedTextTracks();
+        assertEquals(getTimedTextTrackCount(), 3);
+
+        mMediaPlayer.setDisplay(getActivity().getSurfaceHolder());
+        mMediaPlayer.setScreenOnWhilePlaying(true);
+        mMediaPlayer.setWakeMode(mContext, PowerManager.PARTIAL_WAKE_LOCK);
+        mMediaPlayer.setOnTimedTextListener(new MediaPlayer.OnTimedTextListener() {
+            @Override
+            public void onTimedText(MediaPlayer mp, TimedText text) {
+                if (text != null) {
+                    String plainText = text.getText();
+                    if (plainText != null) {
+                        mOnTimedTextCalled.signal();
+                        Log.d(LOG_TAG, "text: " + plainText.trim());
+                    }
+                }
+            }
+        });
+        mMediaPlayer.prepare();
+        mMediaPlayer.start();
+        assertTrue(mMediaPlayer.isPlaying());
+
+        // Run twice to check if repeated selection-deselection on the same track works well.
+        for (int i = 0; i < 2; i++) {
+            // Waits until at least one subtitle is fired. Timeout is 1 sec.
+            selectSubtitleTrack(0);
+            mOnTimedTextCalled.reset();
+            assertTrue(mOnTimedTextCalled.waitForSignal(1000));
+
+            // Try deselecting track.
+            deselectSubtitleTrack(0);
+            mOnTimedTextCalled.reset();
+            assertFalse(mOnTimedTextCalled.waitForSignal(1000));
+        }
+
+        // Run the same test for external subtitle track.
+        for (int i = 0; i < 2; i++) {
+            selectSubtitleTrack(2);
+            mOnTimedTextCalled.reset();
+            assertTrue(mOnTimedTextCalled.waitForSignal(1000));
+
+            // Try deselecting track.
+            deselectSubtitleTrack(2);
+            mOnTimedTextCalled.reset();
+            assertFalse(mOnTimedTextCalled.waitForSignal(1000));
+        }
+
+        try {
+            deselectSubtitleTrack(0);
+            fail("Deselecting unselected track: expected RuntimeException, " +
+                 "but no exception has been triggered.");
+        } catch (RuntimeException e) {
+            // expected
+        }
+
+        mMediaPlayer.stop();
+    }
+
+    public void testChangeSubtitleTrack() throws Exception {
+        loadResource(R.raw.testvideo_with_2_subtitles);
+        readTimedTextTracks();
+        assertEquals(getTimedTextTrackCount(), 2);
+
+        // Adds two more external subtitle files.
+        loadSubtitleSource(R.raw.test_subtitle1_srt);
+        loadSubtitleSource(R.raw.test_subtitle2_srt);
+        readTimedTextTracks();
+        assertEquals(getTimedTextTrackCount(), 4);
+
+        mMediaPlayer.setDisplay(getActivity().getSurfaceHolder());
+        mMediaPlayer.setScreenOnWhilePlaying(true);
+        mMediaPlayer.setWakeMode(mContext, PowerManager.PARTIAL_WAKE_LOCK);
+        mMediaPlayer.setOnTimedTextListener(new MediaPlayer.OnTimedTextListener() {
+            @Override
+            public void onTimedText(MediaPlayer mp, TimedText text) {
+                final int toleranceMs = 100;
+                final int durationMs = 500;
+                int posMs = mMediaPlayer.getCurrentPosition();
+                if (text != null) {
+                    String plainText = text.getText();
+                    if (plainText != null) {
+                        StringTokenizer tokens = new StringTokenizer(plainText.trim(), ":");
+                        int subtitleTrackIndex = Integer.parseInt(tokens.nextToken());
+                        int startMs = Integer.parseInt(tokens.nextToken());
+                        Log.d(LOG_TAG, "text: " + plainText.trim() +
+                              ", trackId: " + subtitleTrackIndex + ", posMs: " + posMs);
+                        assertTrue("The diff between subtitle's start time " + startMs +
+                                   " and current time " + posMs +
+                                   " is over tolerance " + toleranceMs,
+                                   (posMs >= startMs - toleranceMs) &&
+                                   (posMs < startMs + durationMs + toleranceMs) );
+                        assertEquals("Expected track: " + mSelectedTimedTextIndex +
+                                     ", actual track: " + subtitleTrackIndex,
+                                     mSelectedTimedTextIndex, subtitleTrackIndex);
+                        mOnTimedTextCalled.signal();
+                    }
+                }
+            }
+        });
+
+        mMediaPlayer.prepare();
+        assertFalse(mMediaPlayer.isPlaying());
+
+        selectSubtitleTrack(0);
+        mOnTimedTextCalled.reset();
+
+        mMediaPlayer.start();
+        assertTrue(mMediaPlayer.isPlaying());
+
+        // Waits until at least two subtitles are fired. Timeout is 2 sec.
+        // Please refer the test srt files:
+        // test_subtitle1_srt.3gp and test_subtitle2_srt.3gp
+        assertTrue(mOnTimedTextCalled.waitForCountedSignals(2, 2000) >= 2);
+
+        selectSubtitleTrack(1);
+        mOnTimedTextCalled.reset();
+        assertTrue(mOnTimedTextCalled.waitForCountedSignals(2, 2000) >= 2);
+
+        selectSubtitleTrack(2);
+        mOnTimedTextCalled.reset();
+        assertTrue(mOnTimedTextCalled.waitForCountedSignals(2, 2000) >= 2);
+
+        selectSubtitleTrack(3);
+        mOnTimedTextCalled.reset();
+        assertTrue(mOnTimedTextCalled.waitForCountedSignals(2, 2000) >= 2);
+        mMediaPlayer.stop();
     }
 
     public void testCallback() throws Throwable {

@@ -15,8 +15,10 @@
  */
 
 #include "Log.h"
+#include "Settings.h"
 #include "StringUtil.h"
 #include "Report.h"
+#include "task/TaskCase.h"
 
 
 Report* Report::mInstance = NULL;
@@ -43,7 +45,9 @@ Report::Report()
 
 Report::~Report()
 {
-    writeSummary();
+    writeReport();
+    mFailedCases.clear();
+    mPassedCases.clear();
 }
 
 bool Report::init(const char* dirName)
@@ -52,9 +56,10 @@ bool Report::init(const char* dirName)
         return true;
     }
     android::String8 report;
-    if (report.appendFormat("%s/report.txt", dirName) != 0) {
+    if (report.appendFormat("%s/report.xml", dirName) != 0) {
         return false;
     }
+    Settings::Instance()->addSetting(Settings::EREPORT_FILE, report);
     return FileUtil::init(report.string());
 }
 
@@ -66,27 +71,53 @@ void Report::printf(const char* fmt, ...)
     va_end(ap);
 }
 
-void Report::addCasePassed(const android::String8& name)
+void Report::addCasePassed(const TaskCase* task)
 {
-    mPassedCases.push_back(name);
+    android::String8 name(" ");
+    task->getCaseName(name);
+    StringPair pair(name, task->getDetails());
+    mPassedCases.push_back(pair);
 }
 
-void Report::addCaseFailed(const android::String8& name)
+void Report::addCaseFailed(const TaskCase* task)
 {
-    mFailedCases.push_back(name);
+    android::String8 name(" ");
+    task->getCaseName(name);
+    StringPair pair(name, task->getDetails());
+    mFailedCases.push_back(pair);
 }
 
-void Report::writeSummary()
+void Report::writeResult(std::list<StringPair>::const_iterator begin,
+        std::list<StringPair>::const_iterator end, bool passed)
 {
-    printf("= Test cases executed: %d, passed: %d, failed: %d =",
-            mPassedCases.size() + mFailedCases.size(), mPassedCases.size(), mFailedCases.size());
-    printf("= Failed cases =");
-    std::list<android::String8>::iterator it;
-    for (it = mFailedCases.begin(); it != mFailedCases.end(); it++) {
-        printf("* %s", it->string());
+    std::list<StringPair>::const_iterator it;
+    for (it = begin; it != end; it++) {
+        if (passed) {
+            printf("    <test title=\"%s\" result=\"pass\" >", it->first.string());
+        } else {
+            printf("    <test title=\"%s\" result=\"fail\" >", it->first.string());
+        }
+        printf("        <details>\n%s", it->second.string());
+        printf("        </details>");
+        printf("    </test>");
     }
-    printf("= Passed cases =");
-    for (it = mPassedCases.begin(); it != mPassedCases.end(); it++) {
-        printf("* %s", it->string());
-    }
+}
+
+void Report::writeReport()
+{
+    printf("<?xml version='1.0' encoding='utf-8' standalone='yes' ?>");
+    printf("<audio-test-results-report report-version=\"1\" creation-time=\"%s\">",
+            Settings::Instance()->getSetting(Settings::EREPORT_TIME).string());
+    printf("  <verifier-info version-name=\"1\" version-code=\"1\" />");
+    printf("  <device-info>");
+    printf("    %s", Settings::Instance()->getSetting(Settings::EDEVICE_INFO).string());
+    printf("  </device-info>");
+    printf("  <audio-test-results xml=\"%s\">",
+            Settings::Instance()->getSetting(Settings::ETEST_XML).string());
+
+    writeResult(mFailedCases.begin(), mFailedCases.end(), false);
+    writeResult(mPassedCases.begin(), mPassedCases.end(), true);
+
+    printf("  </audio-test-results>");
+    printf("</audio-test-results-report>");
 }

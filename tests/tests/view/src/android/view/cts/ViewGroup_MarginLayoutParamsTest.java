@@ -81,7 +81,92 @@ public class ViewGroup_MarginLayoutParamsTest extends InstrumentationTestCase {
         assertEquals(120, mMarginLayoutParams.rightMargin);
         assertEquals(140, mMarginLayoutParams.bottomMargin);
 
-        assertEquals(Integer.MIN_VALUE, mMarginLayoutParams.startMargin);
-        assertEquals(Integer.MIN_VALUE, mMarginLayoutParams.endMargin);
+        assertEquals(20, mMarginLayoutParams.getMarginStart());
+        assertEquals(120, mMarginLayoutParams.getMarginEnd());
+
+        assertEquals(false, mMarginLayoutParams.isMarginRelative());
+    }
+
+    public void testSetMarginsRelative() {
+        // create a new MarginLayoutParams instance
+        mMarginLayoutParams = new ViewGroup.MarginLayoutParams(320, 480);
+        mMarginLayoutParams.setMarginsRelative(20, 30, 120, 140);
+        assertEquals(20, mMarginLayoutParams.getMarginStart());
+        assertEquals(30, mMarginLayoutParams.topMargin);
+        assertEquals(120, mMarginLayoutParams.getMarginEnd());
+        assertEquals(140, mMarginLayoutParams.bottomMargin);
+
+        assertEquals(0, mMarginLayoutParams.leftMargin);
+        assertEquals(0, mMarginLayoutParams.rightMargin);
+
+        assertEquals(true, mMarginLayoutParams.isMarginRelative());
+    }
+
+    public void testResolveMarginsRelative() {
+        ViewGroup vg = new LinearLayout(mContext);
+
+        // LTR / normal margin case
+        mMarginLayoutParams = new ViewGroup.MarginLayoutParams(320, 480);
+        mMarginLayoutParams.setMargins(20, 30, 120, 140);
+        vg.setLayoutParams(mMarginLayoutParams);
+        vg.requestLayout();
+
+        assertEquals(20, mMarginLayoutParams.leftMargin);
+        assertEquals(30, mMarginLayoutParams.topMargin);
+        assertEquals(120, mMarginLayoutParams.rightMargin);
+        assertEquals(140, mMarginLayoutParams.bottomMargin);
+
+        assertEquals(20, mMarginLayoutParams.getMarginStart());
+        assertEquals(120, mMarginLayoutParams.getMarginEnd());
+
+        assertEquals(false, mMarginLayoutParams.isMarginRelative());
+
+        // LTR / relative margin case
+        mMarginLayoutParams.setMarginsRelative(20, 30, 120, 140);
+        vg.setLayoutParams(mMarginLayoutParams);
+        vg.requestLayout();
+
+        assertEquals(20, mMarginLayoutParams.getMarginStart());
+        assertEquals(30, mMarginLayoutParams.topMargin);
+        assertEquals(120, mMarginLayoutParams.getMarginEnd());
+        assertEquals(140, mMarginLayoutParams.bottomMargin);
+
+        assertEquals(20, mMarginLayoutParams.leftMargin);
+        assertEquals(120, mMarginLayoutParams.rightMargin);
+
+        assertEquals(true, mMarginLayoutParams.isMarginRelative());
+
+        // RTL / normal margin case
+        vg.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+
+        mMarginLayoutParams = new ViewGroup.MarginLayoutParams(320, 480);
+        mMarginLayoutParams.setMargins(20, 30, 120, 140);
+        vg.setLayoutParams(mMarginLayoutParams);
+        vg.requestLayout();
+
+        assertEquals(20, mMarginLayoutParams.leftMargin);
+        assertEquals(30, mMarginLayoutParams.topMargin);
+        assertEquals(120, mMarginLayoutParams.rightMargin);
+        assertEquals(140, mMarginLayoutParams.bottomMargin);
+
+        assertEquals(120, mMarginLayoutParams.getMarginStart());
+        assertEquals(20, mMarginLayoutParams.getMarginEnd());
+
+        assertEquals(false, mMarginLayoutParams.isMarginRelative());
+
+        // RTL / relative margin case
+        mMarginLayoutParams.setMarginsRelative(20, 30, 120, 140);
+        vg.setLayoutParams(mMarginLayoutParams);
+        vg.requestLayout();
+
+        assertEquals(20, mMarginLayoutParams.getMarginStart());
+        assertEquals(30, mMarginLayoutParams.topMargin);
+        assertEquals(120, mMarginLayoutParams.getMarginEnd());
+        assertEquals(140, mMarginLayoutParams.bottomMargin);
+
+        assertEquals(120, mMarginLayoutParams.leftMargin);
+        assertEquals(20, mMarginLayoutParams.rightMargin);
+
+        assertEquals(true, mMarginLayoutParams.isMarginRelative());
     }
 }

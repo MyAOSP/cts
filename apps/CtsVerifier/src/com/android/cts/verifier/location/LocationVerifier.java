@@ -45,18 +45,28 @@ public class LocationVerifier implements Handler.Callback {
     private int mNumActiveUpdates = 0;
     private int mNumPassiveUpdates = 0;
     private boolean mRunning = false;
+    private boolean mActiveLocationArrive = false;
 
     private class ActiveListener implements LocationListener {
         @Override
         public void onLocationChanged(Location location) {
             if (!mRunning) return;
 
+            mActiveLocationArrive = true;
             mNumActiveUpdates++;
             scheduleTimeout();
 
             long timestamp = location.getTime();
             long delta = timestamp - mLastActiveTimestamp;
             mLastActiveTimestamp = timestamp;
+
+            if (location.getAccuracy() <= 0.0) {
+                fail(mProvider + " location has invalid accuracy: " + location.getAccuracy());
+            }
+            if (location.getElapsedRealtimeNanos() <= 0) {
+                fail(mProvider + " location has invalid elapsed realtime: " +
+                        location.getElapsedRealtimeNanos());
+            }
 
             if (mNumActiveUpdates != 1 && delta < mMinActiveInterval) {
                 fail(mProvider + " location updated too fast: " + delta + "ms < " +
@@ -95,10 +105,27 @@ public class LocationVerifier implements Handler.Callback {
             if (!mRunning) return;
             if (!location.getProvider().equals(mProvider)) return;
 
+            // When a test round start, passive listener shouldn't recevice location before active listener.
+            // If this situation occurs, we treat this location as overdue location.
+            // (The overdue location comes from previous test round, it occurs occasionally)
+            // We have to skip it to prevent wrong calculation of time interval.
+            if (!mActiveLocationArrive) {
+                mCb.log("ignoring passive " + mProvider + " update");
+                return;
+            }
+
             mNumPassiveUpdates++;
             long timestamp = location.getTime();
             long delta = timestamp - mLastPassiveTimestamp;
             mLastPassiveTimestamp = timestamp;
+
+            if (location.getAccuracy() <= 0.0) {
+                fail(mProvider + " location has invalid accuracy: " + location.getAccuracy());
+            }
+            if (location.getElapsedRealtimeNanos() <= 0) {
+                fail(mProvider + " location has invalid elapsed realtime: " +
+                        location.getElapsedRealtimeNanos());
+            }
 
             if (mNumPassiveUpdates != 1 && delta < mMinPassiveInterval) {
                 fail("passive " + mProvider + " location updated too fast: " + delta + "ms < " +

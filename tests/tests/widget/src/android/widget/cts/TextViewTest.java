@@ -1797,7 +1797,7 @@ public class TextViewTest extends ActivityInstrumentationTestCase2<TextViewStubA
         assertEquals(20f, mTextView.getTextSize(), 0.01f);
 
         // getTypeface
-        // getTypeface will be null if android:typeface is not set or is set to normal,
+        // getTypeface will be null if android:typeface is set to normal,
         // and android:style is not set or is set to normal
         assertNull(mTextView.getTypeface());
 
@@ -2982,6 +2982,445 @@ public class TextViewTest extends ActivityInstrumentationTestCase2<TextViewStubA
 
         assertEquals(mActivity.getResources().getString(R.string.text_view_hello),
                 outText.text.toString());
+    }
+
+    @UiThreadTest
+    public void testTextDirectionDefault() {
+        TextView tv = new TextView(mActivity);
+        assertEquals(View.TEXT_DIRECTION_INHERIT, tv.getRawTextDirection());
+    }
+
+    @UiThreadTest
+    public void testSetGetTextDirection() {
+        TextView tv = new TextView(mActivity);
+
+        tv.setTextDirection(View.TEXT_DIRECTION_FIRST_STRONG);
+        assertEquals(View.TEXT_DIRECTION_FIRST_STRONG, tv.getRawTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_ANY_RTL);
+        assertEquals(View.TEXT_DIRECTION_ANY_RTL, tv.getRawTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_INHERIT);
+        assertEquals(View.TEXT_DIRECTION_INHERIT, tv.getRawTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_LTR);
+        assertEquals(View.TEXT_DIRECTION_LTR, tv.getRawTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_RTL);
+        assertEquals(View.TEXT_DIRECTION_RTL, tv.getRawTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_LOCALE);
+        assertEquals(View.TEXT_DIRECTION_LOCALE, tv.getRawTextDirection());
+    }
+
+    @UiThreadTest
+    public void testGetResolvedTextDirectionLtr() {
+        TextView tv = new TextView(mActivity);
+        tv.setText("this is a test");
+
+        assertEquals(View.TEXT_DIRECTION_FIRST_STRONG, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_FIRST_STRONG);
+        assertEquals(View.TEXT_DIRECTION_FIRST_STRONG, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_ANY_RTL);
+        assertEquals(View.TEXT_DIRECTION_ANY_RTL, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_INHERIT);
+        assertEquals(View.TEXT_DIRECTION_FIRST_STRONG, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_LTR);
+        assertEquals(View.TEXT_DIRECTION_LTR, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_RTL);
+        assertEquals(View.TEXT_DIRECTION_RTL, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_LOCALE);
+        assertEquals(View.TEXT_DIRECTION_LOCALE, tv.getTextDirection());
+    }
+
+    @UiThreadTest
+    public void testGetResolvedTextDirectionLtrWithInheritance() {
+        LinearLayout ll = new LinearLayout(mActivity);
+        ll.setTextDirection(View.TEXT_DIRECTION_ANY_RTL);
+
+        TextView tv = new TextView(mActivity);
+        tv.setText("this is a test");
+        ll.addView(tv);
+
+        tv.setTextDirection(View.TEXT_DIRECTION_FIRST_STRONG);
+        assertEquals(View.TEXT_DIRECTION_FIRST_STRONG, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_ANY_RTL);
+        assertEquals(View.TEXT_DIRECTION_ANY_RTL, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_INHERIT);
+        assertEquals(View.TEXT_DIRECTION_ANY_RTL, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_LTR);
+        assertEquals(View.TEXT_DIRECTION_LTR, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_RTL);
+        assertEquals(View.TEXT_DIRECTION_RTL, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_LOCALE);
+        assertEquals(View.TEXT_DIRECTION_LOCALE, tv.getTextDirection());
+    }
+
+    @UiThreadTest
+    public void testGetResolvedTextDirectionRtl() {
+        TextView tv = new TextView(mActivity);
+        tv.setText("\u05DD\u05DE"); // hebrew
+
+        assertEquals(View.TEXT_DIRECTION_FIRST_STRONG, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_FIRST_STRONG);
+        assertEquals(View.TEXT_DIRECTION_FIRST_STRONG, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_ANY_RTL);
+        assertEquals(View.TEXT_DIRECTION_ANY_RTL, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_INHERIT);
+        assertEquals(View.TEXT_DIRECTION_FIRST_STRONG, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_LTR);
+        assertEquals(View.TEXT_DIRECTION_LTR, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_RTL);
+        assertEquals(View.TEXT_DIRECTION_RTL, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_LOCALE);
+        assertEquals(View.TEXT_DIRECTION_LOCALE, tv.getTextDirection());
+    }
+
+    @UiThreadTest
+    public void testGetResolvedTextDirectionRtlWithInheritance() {
+        LinearLayout ll = new LinearLayout(mActivity);
+        ll.setTextDirection(View.TEXT_DIRECTION_FIRST_STRONG);
+
+        TextView tv = new TextView(mActivity);
+        tv.setText("\u05DD\u05DE"); // hebrew
+        ll.addView(tv);
+
+        tv.setTextDirection(View.TEXT_DIRECTION_FIRST_STRONG);
+        assertEquals(View.TEXT_DIRECTION_FIRST_STRONG, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_ANY_RTL);
+        assertEquals(View.TEXT_DIRECTION_ANY_RTL, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_INHERIT);
+        assertEquals(View.TEXT_DIRECTION_FIRST_STRONG, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_LTR);
+        assertEquals(View.TEXT_DIRECTION_LTR, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_RTL);
+        assertEquals(View.TEXT_DIRECTION_RTL, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_LOCALE);
+        assertEquals(View.TEXT_DIRECTION_LOCALE, tv.getTextDirection());
+
+        // Force to RTL text direction on the layout
+        ll.setTextDirection(View.TEXT_DIRECTION_RTL);
+
+        tv.setTextDirection(View.TEXT_DIRECTION_FIRST_STRONG);
+        assertEquals(View.TEXT_DIRECTION_FIRST_STRONG, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_ANY_RTL);
+        assertEquals(View.TEXT_DIRECTION_ANY_RTL, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_INHERIT);
+        assertEquals(View.TEXT_DIRECTION_RTL, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_LTR);
+        assertEquals(View.TEXT_DIRECTION_LTR, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_RTL);
+        assertEquals(View.TEXT_DIRECTION_RTL, tv.getTextDirection());
+
+        tv.setTextDirection(View.TEXT_DIRECTION_LOCALE);
+        assertEquals(View.TEXT_DIRECTION_LOCALE, tv.getTextDirection());
+    }
+
+    @UiThreadTest
+    public void testResetTextDirection() {
+        LinearLayout ll = (LinearLayout) mActivity.findViewById(R.id.layout_textviewtest);
+        TextView tv = (TextView) mActivity.findViewById(R.id.textview_rtl);
+
+        ll.setTextDirection(View.TEXT_DIRECTION_RTL);
+        tv.setTextDirection(View.TEXT_DIRECTION_INHERIT);
+        assertEquals(View.TEXT_DIRECTION_RTL, tv.getTextDirection());
+
+        ll.removeView(tv);
+        assertEquals(View.TEXT_DIRECTION_FIRST_STRONG, tv.getTextDirection());
+    }
+
+    @UiThreadTest
+    public void testTextAlignmentDefault() {
+        TextView tv = new TextView(getActivity());
+        assertEquals(View.TEXT_ALIGNMENT_GRAVITY, tv.getRawTextAlignment());
+        // resolved default text alignment is GRAVITY
+        assertEquals(View.TEXT_ALIGNMENT_GRAVITY, tv.getTextAlignment());
+    }
+
+    @UiThreadTest
+    public void testSetGetTextAlignment() {
+        TextView tv = new TextView(getActivity());
+
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_GRAVITY);
+        assertEquals(View.TEXT_ALIGNMENT_GRAVITY, tv.getRawTextAlignment());
+
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+        assertEquals(View.TEXT_ALIGNMENT_CENTER, tv.getRawTextAlignment());
+
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_TEXT_START);
+        assertEquals(View.TEXT_ALIGNMENT_TEXT_START, tv.getRawTextAlignment());
+
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_TEXT_END);
+        assertEquals(View.TEXT_ALIGNMENT_TEXT_END, tv.getRawTextAlignment());
+
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        assertEquals(View.TEXT_ALIGNMENT_VIEW_START, tv.getRawTextAlignment());
+
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_END);
+        assertEquals(View.TEXT_ALIGNMENT_VIEW_END, tv.getRawTextAlignment());
+    }
+
+    @UiThreadTest
+    public void testGetResolvedTextAlignment() {
+        TextView tv = new TextView(getActivity());
+
+        assertEquals(View.TEXT_ALIGNMENT_GRAVITY, tv.getTextAlignment());
+
+        // Test center alignment first so that we dont hit the default case
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+        assertEquals(View.TEXT_ALIGNMENT_CENTER, tv.getTextAlignment());
+
+        // Test the default case too
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_GRAVITY);
+        assertEquals(View.TEXT_ALIGNMENT_GRAVITY, tv.getTextAlignment());
+
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_TEXT_START);
+        assertEquals(View.TEXT_ALIGNMENT_TEXT_START, tv.getTextAlignment());
+
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_TEXT_END);
+        assertEquals(View.TEXT_ALIGNMENT_TEXT_END, tv.getTextAlignment());
+
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        assertEquals(View.TEXT_ALIGNMENT_VIEW_START, tv.getTextAlignment());
+
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_END);
+        assertEquals(View.TEXT_ALIGNMENT_VIEW_END, tv.getTextAlignment());
+    }
+
+    @UiThreadTest
+    public void testGetResolvedTextAlignmentWithInheritance() {
+        LinearLayout ll = new LinearLayout(getActivity());
+        ll.setTextAlignment(View.TEXT_ALIGNMENT_GRAVITY);
+
+        TextView tv = new TextView(getActivity());
+        ll.addView(tv);
+
+        // check defaults
+        assertEquals(View.TEXT_ALIGNMENT_GRAVITY, tv.getRawTextAlignment());
+        assertEquals(View.TEXT_ALIGNMENT_GRAVITY, tv.getTextAlignment());
+
+        // set inherit and check that child is following parent
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_INHERIT);
+        assertEquals(View.TEXT_ALIGNMENT_INHERIT, tv.getRawTextAlignment());
+
+        ll.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+        assertEquals(View.TEXT_ALIGNMENT_CENTER, tv.getTextAlignment());
+
+        ll.setTextAlignment(View.TEXT_ALIGNMENT_TEXT_START);
+        assertEquals(View.TEXT_ALIGNMENT_TEXT_START, tv.getTextAlignment());
+
+        ll.setTextAlignment(View.TEXT_ALIGNMENT_TEXT_END);
+        assertEquals(View.TEXT_ALIGNMENT_TEXT_END, tv.getTextAlignment());
+
+        ll.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        assertEquals(View.TEXT_ALIGNMENT_VIEW_START, tv.getTextAlignment());
+
+        ll.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_END);
+        assertEquals(View.TEXT_ALIGNMENT_VIEW_END, tv.getTextAlignment());
+
+        // now get rid of the inheritance but still change the parent
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+
+        ll.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+        assertEquals(View.TEXT_ALIGNMENT_CENTER, tv.getTextAlignment());
+
+        ll.setTextAlignment(View.TEXT_ALIGNMENT_TEXT_START);
+        assertEquals(View.TEXT_ALIGNMENT_CENTER, tv.getTextAlignment());
+
+        ll.setTextAlignment(View.TEXT_ALIGNMENT_TEXT_END);
+        assertEquals(View.TEXT_ALIGNMENT_CENTER, tv.getTextAlignment());
+
+        ll.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        assertEquals(View.TEXT_ALIGNMENT_CENTER, tv.getTextAlignment());
+
+        ll.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_END);
+        assertEquals(View.TEXT_ALIGNMENT_CENTER, tv.getTextAlignment());
+    }
+
+    @UiThreadTest
+    public void testResetTextAlignment() {
+        TextViewStubActivity activity = getActivity();
+
+        LinearLayout ll = (LinearLayout) activity.findViewById(R.id.layout_textviewtest);
+        TextView tv = (TextView) activity.findViewById(R.id.textview_rtl);
+
+        ll.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_INHERIT);
+        assertEquals(View.TEXT_ALIGNMENT_CENTER, tv.getTextAlignment());
+
+        ll.removeView(tv);
+        // default text alignment is GRAVITY
+        assertEquals(View.TEXT_ALIGNMENT_GRAVITY, tv.getTextAlignment());
+    }
+
+    @UiThreadTest
+    public void testDrawableResolution() {
+        final int LEFT = 0;
+        final int TOP = 1;
+        final int RIGHT = 2;
+        final int BOTTOM = 3;
+
+        TextViewStubActivity activity = getActivity();
+
+        // Case 1.1: left / right drawable defined in default LTR mode
+        TextView tv = (TextView) activity.findViewById(R.id.textview_drawable_1_1);
+        Drawable[] drawables = tv.getCompoundDrawables();
+
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_blue),
+                ((BitmapDrawable) drawables[LEFT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_red),
+                ((BitmapDrawable) drawables[RIGHT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_green),
+                ((BitmapDrawable) drawables[TOP]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_yellow),
+                ((BitmapDrawable) drawables[BOTTOM]).getBitmap());
+
+        // Case 1.2: left / right drawable defined in default RTL mode
+        tv = (TextView) activity.findViewById(R.id.textview_drawable_1_2);
+        drawables = tv.getCompoundDrawables();
+
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_blue),
+                ((BitmapDrawable) drawables[LEFT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_red),
+                ((BitmapDrawable) drawables[RIGHT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_green),
+                ((BitmapDrawable) drawables[TOP]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_yellow),
+                ((BitmapDrawable) drawables[BOTTOM]).getBitmap());
+
+        // Case 2.1: start / end drawable defined in LTR mode
+        tv = (TextView) activity.findViewById(R.id.textview_drawable_2_1);
+        drawables = tv.getCompoundDrawables();
+
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_blue),
+                ((BitmapDrawable) drawables[LEFT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_red),
+                ((BitmapDrawable) drawables[RIGHT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_green),
+                ((BitmapDrawable) drawables[TOP]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_yellow),
+                ((BitmapDrawable) drawables[BOTTOM]).getBitmap());
+
+        // Case 2.2: start / end drawable defined in RTL mode
+        tv = (TextView) activity.findViewById(R.id.textview_drawable_2_2);
+        drawables = tv.getCompoundDrawables();
+
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_red),
+                ((BitmapDrawable) drawables[LEFT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_blue),
+                ((BitmapDrawable) drawables[RIGHT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_green),
+                ((BitmapDrawable) drawables[TOP]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_yellow),
+                ((BitmapDrawable) drawables[BOTTOM]).getBitmap());
+
+        // Case 3.1: left / right / start / end drawable defined in LTR mode
+        tv = (TextView) activity.findViewById(R.id.textview_drawable_3_1);
+        drawables = tv.getCompoundDrawables();
+
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_blue),
+                ((BitmapDrawable) drawables[LEFT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_red),
+                ((BitmapDrawable) drawables[RIGHT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_green),
+                ((BitmapDrawable) drawables[TOP]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_yellow),
+                ((BitmapDrawable) drawables[BOTTOM]).getBitmap());
+
+        // Case 3.2: left / right / start / end drawable defined in RTL mode
+        tv = (TextView) activity.findViewById(R.id.textview_drawable_3_2);
+        drawables = tv.getCompoundDrawables();
+
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_red),
+                ((BitmapDrawable) drawables[LEFT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_blue),
+                ((BitmapDrawable) drawables[RIGHT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_green),
+                ((BitmapDrawable) drawables[TOP]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_yellow),
+                ((BitmapDrawable) drawables[BOTTOM]).getBitmap());
+
+        // Case 4.1: start / end drawable defined in LTR mode inside a layout
+        // that defines the layout direction
+        tv = (TextView) activity.findViewById(R.id.textview_drawable_4_1);
+        drawables = tv.getCompoundDrawables();
+
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_blue),
+                ((BitmapDrawable) drawables[LEFT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_red),
+                ((BitmapDrawable) drawables[RIGHT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_green),
+                ((BitmapDrawable) drawables[TOP]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_yellow),
+                ((BitmapDrawable) drawables[BOTTOM]).getBitmap());
+
+        // Case 4.2: start / end drawable defined in RTL mode inside a layout
+        // that defines the layout direction
+        tv = (TextView) activity.findViewById(R.id.textview_drawable_4_2);
+        drawables = tv.getCompoundDrawables();
+
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_red),
+                ((BitmapDrawable) drawables[LEFT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_blue),
+                ((BitmapDrawable) drawables[RIGHT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_green),
+                ((BitmapDrawable) drawables[TOP]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_yellow),
+                ((BitmapDrawable) drawables[BOTTOM]).getBitmap());
+
+        // Case 5.1: left / right / start / end drawable defined in LTR mode inside a layout
+        // that defines the layout direction
+        tv = (TextView) activity.findViewById(R.id.textview_drawable_3_1);
+        drawables = tv.getCompoundDrawables();
+
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_blue),
+                ((BitmapDrawable) drawables[LEFT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_red),
+                ((BitmapDrawable) drawables[RIGHT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_green),
+                ((BitmapDrawable) drawables[TOP]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_yellow),
+                ((BitmapDrawable) drawables[BOTTOM]).getBitmap());
+
+        // Case 5.2: left / right / start / end drawable defined in RTL mode inside a layout
+        // that defines the layout direction
+        tv = (TextView) activity.findViewById(R.id.textview_drawable_3_2);
+        drawables = tv.getCompoundDrawables();
+
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_red),
+                ((BitmapDrawable) drawables[LEFT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_blue),
+                ((BitmapDrawable) drawables[RIGHT]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_green),
+                ((BitmapDrawable) drawables[TOP]).getBitmap());
+        WidgetTestUtils.assertEquals(getBitmap(R.drawable.icon_yellow),
+                ((BitmapDrawable) drawables[BOTTOM]).getBitmap());
     }
 
     private static class MockOnEditorActionListener implements OnEditorActionListener {

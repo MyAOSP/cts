@@ -17,7 +17,7 @@
 #
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
-LOCAL_MODULE := libopengltest
+LOCAL_MODULE := libopengltest_jni
 LOCAL_MODULE_TAGS := optional
 LOCAL_SRC_FILES := common.cpp \
                    gl2_jni_libone.cpp \
@@ -27,6 +27,12 @@ LOCAL_SRC_FILES := common.cpp \
                    attach_shader_four.cpp \
                    attach_shader_five.cpp \
                    attach_shader_six.cpp \
+                   attach_shader_seven.cpp \
+                   attach_shader_eight.cpp \
+                   attach_shader_nine.cpp \
+                   attach_shader_ten.cpp \
+                   attach_shader_eleven.cpp \
+                   color_one.cpp
 
 LOCAL_C_INCLUDES := $(JNI_H_INCLUDE)
 

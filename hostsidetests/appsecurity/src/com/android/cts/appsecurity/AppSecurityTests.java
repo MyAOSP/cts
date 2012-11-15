@@ -17,18 +17,24 @@
 package com.android.cts.appsecurity;
 
 import com.android.cts.tradefed.build.CtsBuildHelper;
+import com.android.ddmlib.IDevice;
 import com.android.ddmlib.Log;
+import com.android.ddmlib.testrunner.InstrumentationResultParser;
 import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
+import com.android.ddmlib.testrunner.TestIdentifier;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.result.CollectingTestListener;
+import com.android.tradefed.result.TestResult;
+import com.android.tradefed.result.TestResult.TestStatus;
 import com.android.tradefed.result.TestRunResult;
 import com.android.tradefed.testtype.DeviceTestCase;
 import com.android.tradefed.testtype.IBuildReceiver;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.util.Map;
 
 /**
  * Set of tests that verify various security checks involving multiple apps are properly enforced.
@@ -80,11 +86,19 @@ public class AppSecurityTests extends DeviceTestCase implements IBuildReceiver {
     // testPermissionDiffCert constants
     private static final String DECLARE_PERMISSION_APK = "CtsPermissionDeclareApp.apk";
     private static final String DECLARE_PERMISSION_PKG = "com.android.cts.permissiondeclareapp";
+    private static final String DECLARE_PERMISSION_COMPAT_APK = "CtsPermissionDeclareAppCompat.apk";
+    private static final String DECLARE_PERMISSION_COMPAT_PKG = "com.android.cts.permissiondeclareappcompat";
+
     private static final String PERMISSION_DIFF_CERT_APK = "CtsUsePermissionDiffCert.apk";
     private static final String PERMISSION_DIFF_CERT_PKG =
         "com.android.cts.usespermissiondiffcertapp";
 
     private static final String READ_EXTERNAL_STORAGE = "android.permission.READ_EXTERNAL_STORAGE";
+
+    private static final String MULTIUSER_STORAGE_APK = "CtsMultiUserStorageApp.apk";
+    private static final String MULTIUSER_STORAGE_PKG = "com.android.cts.multiuserstorageapp";
+    private static final String MULTIUSER_STORAGE_CLASS = MULTIUSER_STORAGE_PKG
+            + ".MultiUserStorageTest";
 
     private static final String LOG_TAG = "AppSecurityTests";
 
@@ -202,7 +216,8 @@ public class AppSecurityTests extends DeviceTestCase implements IBuildReceiver {
             getDevice().uninstallPackage(WRITE_EXTERNAL_STORAGE_APP_PKG);
 
             // stage test file on external storage
-            getDevice().pushString("CAEK", "/sdcard/meow");
+            getDevice().pushString("CAEK",
+                    getDevice().getMountPoint(IDevice.MNT_EXTERNAL_STORAGE) + "/meow");
 
             // mark permission as not enforced
             setPermissionEnforced(getDevice(), READ_EXTERNAL_STORAGE, false);
@@ -233,41 +248,20 @@ public class AppSecurityTests extends DeviceTestCase implements IBuildReceiver {
     }
 
     /**
-     * Test behavior when
-     * {@link android.Manifest.permission#READ_EXTERNAL_STORAGE} is enforced.
+     * Verify that legacy filesystem paths continue working, and that they all
+     * point to same location.
      */
-    public void testReadExternalStorageEnforced() throws Exception {
+    public void testExternalStorageLegacyPaths() throws Exception {
         try {
-            getDevice().uninstallPackage(EXTERNAL_STORAGE_APP_PKG);
             getDevice().uninstallPackage(WRITE_EXTERNAL_STORAGE_APP_PKG);
-
-            // stage test file on external storage
-            getDevice().pushString("CAEK", "/sdcard/meow");
-
-            // mark permission as enforced
-            setPermissionEnforced(getDevice(), READ_EXTERNAL_STORAGE, true);
-
-            // install apps and run test
-            assertNull(getDevice()
-                    .installPackage(getTestAppFile(EXTERNAL_STORAGE_APP_APK), false));
             assertNull(getDevice()
                     .installPackage(getTestAppFile(WRITE_EXTERNAL_STORAGE_APP_APK), false));
 
-            // normal app should not be able to read
-            assertTrue("Normal app able to read external storage", runDeviceTests(
-                    EXTERNAL_STORAGE_APP_PKG, EXTERNAL_STORAGE_APP_CLASS,
-                    "testFailReadExternalStorage"));
-
-            // WRITE_EXTERNAL app should be able to read and write
-            assertTrue("WRITE_EXTERNAL app unable to read external storage", runDeviceTests(
+            assertTrue("Failed to verify legacy filesystem paths", runDeviceTests(
                     WRITE_EXTERNAL_STORAGE_APP_PKG, WRITE_EXTERNAL_STORAGE_APP_CLASS,
-                    "testReadExternalStorage"));
-            assertTrue("WRITE_EXTERNAL app unable to write external storage", runDeviceTests(
-                    WRITE_EXTERNAL_STORAGE_APP_PKG, WRITE_EXTERNAL_STORAGE_APP_CLASS,
-                    "testWriteExternalStorage"));
+                    "testLegacyPaths"));
 
         } finally {
-            getDevice().uninstallPackage(EXTERNAL_STORAGE_APP_PKG);
             getDevice().uninstallPackage(WRITE_EXTERNAL_STORAGE_APP_PKG);
         }
     }
@@ -347,11 +341,17 @@ public class AppSecurityTests extends DeviceTestCase implements IBuildReceiver {
         try {
             // cleanup test app that might be installed from previous partial test run
             getDevice().uninstallPackage(DECLARE_PERMISSION_PKG);
+            getDevice().uninstallPackage(DECLARE_PERMISSION_COMPAT_PKG);
             getDevice().uninstallPackage(PERMISSION_DIFF_CERT_PKG);
 
             String installResult = getDevice().installPackage(
                     getTestAppFile(DECLARE_PERMISSION_APK), false);
             assertNull(String.format("failed to install declare permission app. Reason: %s",
+                    installResult), installResult);
+
+            installResult = getDevice().installPackage(
+                    getTestAppFile(DECLARE_PERMISSION_COMPAT_APK), false);
+            assertNull(String.format("failed to install declare permission compat app. Reason: %s",
                     installResult), installResult);
 
             // the app will install, but will get error at runtime
@@ -360,12 +360,89 @@ public class AppSecurityTests extends DeviceTestCase implements IBuildReceiver {
             assertNull(String.format("failed to install permission app with diff cert. Reason: %s",
                     installResult), installResult);
             // run PERMISSION_DIFF_CERT_PKG tests which try to access the permission
-            assertTrue("unexpected result when running permission tests",
-                    runDeviceTests(PERMISSION_DIFF_CERT_PKG));
+            TestRunResult result = doRunTests(PERMISSION_DIFF_CERT_PKG, null, null);
+            assertDeviceTestsPass(result);
         }
         finally {
             getDevice().uninstallPackage(DECLARE_PERMISSION_PKG);
+            getDevice().uninstallPackage(DECLARE_PERMISSION_COMPAT_PKG);
             getDevice().uninstallPackage(PERMISSION_DIFF_CERT_PKG);
+        }
+    }
+
+    /**
+     * Test multi-user emulated storage environment, ensuring that each user has
+     * isolated storage.
+     */
+    public void testMultiUserStorage() throws Exception {
+        final String PACKAGE = MULTIUSER_STORAGE_PKG;
+        final String CLAZZ = MULTIUSER_STORAGE_CLASS;
+
+        if (!isMultiUserSupportedOnDevice(getDevice())) {
+            Log.d(LOG_TAG, "Single user device; skipping isolated storage tests");
+            return;
+        }
+
+        int owner = 0;
+        int secondary = -1;
+        try {
+            // Create secondary user
+            secondary = createUserOnDevice(getDevice());
+
+            // Install our test app
+            getDevice().uninstallPackage(MULTIUSER_STORAGE_PKG);
+            final String installResult = getDevice()
+                    .installPackage(getTestAppFile(MULTIUSER_STORAGE_APK), false);
+            assertNull("Failed to install: " + installResult, installResult);
+
+            // Clear data from previous tests
+            assertDeviceTestsPass(
+                    doRunTestsAsUser(PACKAGE, CLAZZ, "cleanIsolatedStorage", owner));
+            assertDeviceTestsPass(
+                    doRunTestsAsUser(PACKAGE, CLAZZ, "cleanIsolatedStorage", secondary));
+
+            // Have both users try writing into isolated storage
+            assertDeviceTestsPass(
+                    doRunTestsAsUser(PACKAGE, CLAZZ, "writeIsolatedStorage", owner));
+            assertDeviceTestsPass(
+                    doRunTestsAsUser(PACKAGE, CLAZZ, "writeIsolatedStorage", secondary));
+
+            // Verify they both have isolated view of storage
+            assertDeviceTestsPass(
+                    doRunTestsAsUser(PACKAGE, CLAZZ, "readIsolatedStorage", owner));
+            assertDeviceTestsPass(
+                    doRunTestsAsUser(PACKAGE, CLAZZ, "readIsolatedStorage", secondary));
+        } finally {
+            getDevice().uninstallPackage(MULTIUSER_STORAGE_PKG);
+            if (secondary != -1) {
+                removeUserOnDevice(getDevice(), secondary);
+            }
+        }
+    }
+
+    /**
+     * Helper method that checks that all tests in given result passed, and attempts to generate
+     * a meaningful error message if they failed.
+     *
+     * @param result
+     */
+    private void assertDeviceTestsPass(TestRunResult result) {
+        // TODO: consider rerunning if this occurred
+        assertFalse(String.format("Failed to successfully run device tests for %s. Reason: %s",
+                result.getName(), result.getRunFailureMessage()), result.isRunFailure());
+
+        if (result.hasFailedTests()) {
+            // build a meaningful error message
+            StringBuilder errorBuilder = new StringBuilder("on-device tests failed:\n");
+            for (Map.Entry<TestIdentifier, TestResult> resultEntry :
+                result.getTestResults().entrySet()) {
+                if (!resultEntry.getValue().getStatus().equals(TestStatus.PASSED)) {
+                    errorBuilder.append(resultEntry.getKey().toString());
+                    errorBuilder.append(":\n");
+                    errorBuilder.append(resultEntry.getValue().getStackTrace());
+                }
+            }
+            fail(errorBuilder.toString());
         }
     }
 
@@ -410,6 +487,58 @@ public class AppSecurityTests extends DeviceTestCase implements IBuildReceiver {
         }
         CollectingTestListener listener = new CollectingTestListener();
         getDevice().runInstrumentationTests(testRunner, listener);
+        return listener.getCurrentRunResults();
+    }
+
+    private static boolean isMultiUserSupportedOnDevice(ITestDevice device)
+            throws DeviceNotAvailableException {
+        // TODO: move this to ITestDevice once it supports users
+        final String output = device.executeShellCommand("pm get-max-users");
+        try {
+            return Integer.parseInt(output.substring(output.lastIndexOf(" ")).trim()) > 1;
+        } catch (NumberFormatException e) {
+            fail("Failed to parse result: " + output);
+        }
+        return false;
+    }
+
+    private static int createUserOnDevice(ITestDevice device) throws DeviceNotAvailableException {
+        // TODO: move this to ITestDevice once it supports users
+        final String name = "CTS_" + System.currentTimeMillis();
+        final String output = device.executeShellCommand("pm create-user " + name);
+        if (output.startsWith("Success")) {
+            try {
+                return Integer.parseInt(output.substring(output.lastIndexOf(" ")).trim());
+            } catch (NumberFormatException e) {
+                fail("Failed to parse result: " + output);
+            }
+        } else {
+            fail("Failed to create user: " + output);
+        }
+        throw new IllegalStateException();
+    }
+
+    private static void removeUserOnDevice(ITestDevice device, int userId)
+            throws DeviceNotAvailableException {
+        // TODO: move this to ITestDevice once it supports users
+        final String output = device.executeShellCommand("pm remove-user " + userId);
+        if (output.startsWith("Error")) {
+            fail("Failed to remove user: " + output);
+        }
+    }
+
+    private TestRunResult doRunTestsAsUser(
+            String pkgName, String testClassName, String testMethodName, int userId)
+            throws DeviceNotAvailableException {
+        // TODO: move this to RemoteAndroidTestRunner once it supports users
+        final String cmd = "am instrument --user " + userId + " -w -r -e class " + testClassName
+                + "#" + testMethodName + " " + pkgName + "/android.test.InstrumentationTestRunner";
+        Log.i(LOG_TAG, "Running " + cmd + " on " + getDevice().getSerialNumber());
+
+        CollectingTestListener listener = new CollectingTestListener();
+        InstrumentationResultParser parser = new InstrumentationResultParser(pkgName, listener);
+
+        getDevice().executeShellCommand(cmd, parser);
         return listener.getCurrentRunResults();
     }
 

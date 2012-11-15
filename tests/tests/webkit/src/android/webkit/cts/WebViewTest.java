@@ -45,9 +45,11 @@ import android.webkit.CacheManager;
 import android.webkit.CacheManager.CacheResult;
 import android.webkit.ConsoleMessage;
 import android.webkit.DownloadListener;
+import android.webkit.JavascriptInterface;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebBackForwardList;
 import android.webkit.WebChromeClient;
+import android.webkit.WebIconDatabase;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebView.HitTestResult;
@@ -86,6 +88,7 @@ public class WebViewTest extends ActivityInstrumentationTestCase2<WebViewStubAct
     private WebView mWebView;
     private CtsTestServer mWebServer;
     private WebViewOnUiThread mOnUiThread;
+    private WebIconDatabase mIconDb;
 
     public WebViewTest() {
         super("com.android.cts.stub", WebViewStubActivity.class);
@@ -107,6 +110,11 @@ public class WebViewTest extends ActivityInstrumentationTestCase2<WebViewStubAct
         mOnUiThread.cleanUp();
         if (mWebServer != null) {
             mWebServer.shutdown();
+        }
+        if (mIconDb != null) {
+            mIconDb.removeAllIcons();
+            mIconDb.close();
+            mIconDb = null;
         }
         super.tearDown();
     }
@@ -404,6 +412,7 @@ public class WebViewTest extends ActivityInstrumentationTestCase2<WebViewStubAct
                 return mWasProvideResultCalled;
             }
 
+            @JavascriptInterface
             public synchronized void provideResult(String result) {
                 mWasProvideResultCalled = true;
                 mResult = result;
@@ -476,9 +485,12 @@ public class WebViewTest extends ActivityInstrumentationTestCase2<WebViewStubAct
     public void testUseRemovedJavascriptInterface() throws Throwable {
         class RemovedObject {
             @Override
+            @JavascriptInterface
             public String toString() {
                 return "removedObject";
             }
+
+            @JavascriptInterface
             public void remove() throws Throwable {
                 mOnUiThread.removeJavascriptInterface("removedObject");
                 System.gc();
@@ -487,6 +499,8 @@ public class WebViewTest extends ActivityInstrumentationTestCase2<WebViewStubAct
         class ResultObject {
             private String mResult;
             private boolean mIsResultAvailable;
+
+            @JavascriptInterface
             public synchronized void setResult(String result) {
                 mResult = result;
                 mIsResultAvailable = true;
@@ -773,7 +787,7 @@ public class WebViewTest extends ActivityInstrumentationTestCase2<WebViewStubAct
     }
 
     @UiThreadTest
-    public void testLoadDataWithBaseUrl() throws Exception {
+    public void testLoadDataWithBaseUrl() throws Throwable {
         assertNull(mWebView.getTitle());
         assertNull(mWebView.getUrl());
         String imgUrl = TestHtmlConstants.SMALL_IMG_URL; // relative
@@ -782,6 +796,9 @@ public class WebViewTest extends ActivityInstrumentationTestCase2<WebViewStubAct
         startWebServer(false);
         String baseUrl = mWebServer.getAssetUrl("foo.html");
         String historyUrl = "random";
+        String dbPath = getActivity().getFilesDir().toString() + "/icons";
+        mIconDb = WebIconDatabase.getInstance();
+        mIconDb.open(dbPath);
         mWebServer.resetRequestState();
         // force the favicon to be loaded first
         mOnUiThread.loadDataWithBaseURLAndWaitForCompletion(baseUrl,
@@ -790,7 +807,9 @@ public class WebViewTest extends ActivityInstrumentationTestCase2<WebViewStubAct
         new PollingCheck() {
             @Override
             protected boolean check() {
-                return mWebServer.getLastRequestUrl().endsWith("favicon.ico");
+                String lastRequestedUrl = mWebServer.getLastRequestUrl();
+                return lastRequestedUrl != null
+                        && lastRequestedUrl.endsWith("favicon.ico");
             }
         }.run();
         mOnUiThread.loadDataWithBaseURLAndWaitForCompletion(baseUrl,
@@ -1155,6 +1174,21 @@ public class WebViewTest extends ActivityInstrumentationTestCase2<WebViewStubAct
     }
 
     public void testRequestImageRef() throws Exception, Throwable {
+        final class ImageLoaded {
+            public boolean mImageLoaded;
+
+            @JavascriptInterface
+            public void loaded() {
+                mImageLoaded = true;
+            }
+        }
+        final ImageLoaded imageLoaded = new ImageLoaded();
+        runTestOnUiThread(new Runnable() {
+            public void run() {
+                mOnUiThread.getSettings().setJavaScriptEnabled(true);
+            }
+        });
+        mOnUiThread.addJavascriptInterface(imageLoaded, "imageLoaded");
         AssetManager assets = getActivity().getAssets();
         Bitmap bitmap = BitmapFactory.decodeStream(assets.open(TestHtmlConstants.LARGE_IMG_URL));
         int imgWidth = bitmap.getWidth();
@@ -1163,8 +1197,24 @@ public class WebViewTest extends ActivityInstrumentationTestCase2<WebViewStubAct
         startWebServer(false);
         final String imgUrl = mWebServer.getAssetUrl(TestHtmlConstants.LARGE_IMG_URL);
         mOnUiThread.loadDataAndWaitForCompletion(
-                "<html><title>Title</title><body><img src=\"" + imgUrl
-                + "\"/></body></html>", "text/html", null);
+                "<html><head><title>Title</title><style type=\"text/css\">"
+                + "#imgElement { -webkit-transform: translate3d(0,0,1); }"
+                + "#imgElement.finish { -webkit-transform: translate3d(0,0,0);"
+                + " -webkit-transition-duration: 1ms; }</style>"
+                + "<script type=\"text/javascript\">function imgLoad() {"
+                + "imgElement = document.getElementById('imgElement');"
+                + "imgElement.addEventListener('webkitTransitionEnd',"
+                + "function(e) { imageLoaded.loaded(); });"
+                + "imgElement.className = 'finish';}</script>"
+                + "</head><body><img id=\"imgElement\" src=\"" + imgUrl
+                + "\" width=\"" + imgWidth + "\" height=\"" + imgHeight
+                + "\" onLoad=\"imgLoad()\"/></body></html>", "text/html", null);
+        new PollingCheck() {
+            @Override
+            protected boolean check() {
+                return imageLoaded.mImageLoaded;
+            }
+        }.run();
         getInstrumentation().waitForIdleSync();
 
         final HrefCheckHandler handler = new HrefCheckHandler(mWebView.getHandler().getLooper());
@@ -1727,6 +1777,8 @@ public class WebViewTest extends ActivityInstrumentationTestCase2<WebViewStubAct
     public void testPauseResumeTimers() throws Throwable {
         class Monitor {
             private boolean mIsUpdated;
+
+            @JavascriptInterface
             public synchronized void update() {
                 mIsUpdated  = true;
                 notify();

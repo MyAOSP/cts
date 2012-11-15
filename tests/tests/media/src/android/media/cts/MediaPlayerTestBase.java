@@ -33,47 +33,62 @@ public class MediaPlayerTestBase extends ActivityInstrumentationTestCase2<MediaS
     protected static final int SLEEP_TIME = 1000;
     protected static final int LONG_SLEEP_TIME = 6000;
     protected static final int STREAM_RETRIES = 20;
+    protected static boolean sUseScaleToFitMode = false;
 
     public static class Monitor {
-        private boolean signalled;
+        private int numSignal;
 
         public synchronized void reset() {
-            signalled = false;
+            numSignal = 0;
         }
 
         public synchronized void signal() {
-            signalled = true;
+            numSignal++;
             notifyAll();
         }
 
-        public synchronized void waitForSignal() throws InterruptedException {
-            while (!signalled) {
-                wait();
-            }
+        public synchronized boolean waitForSignal() throws InterruptedException {
+            return waitForCountedSignals(1) > 0;
         }
 
-        public synchronized void waitForSignal(long millis) throws InterruptedException {
-            if (millis == 0) {
-                waitForSignal();
-                return;
+        public synchronized int waitForCountedSignals(int targetCount) throws InterruptedException {
+            while (numSignal < targetCount) {
+                wait();
             }
+            return numSignal;
+        }
 
-            long deadline = System.currentTimeMillis() + millis;
-            while (!signalled) {
+        public synchronized boolean waitForSignal(long timeoutMs) throws InterruptedException {
+            return waitForCountedSignals(1, timeoutMs) > 0;
+        }
+
+        public synchronized int waitForCountedSignals(int targetCount, long timeoutMs)
+                throws InterruptedException {
+            if (timeoutMs == 0) {
+                return waitForCountedSignals(targetCount);
+            }
+            long deadline = System.currentTimeMillis() + timeoutMs;
+            while (numSignal < targetCount) {
                 long delay = deadline - System.currentTimeMillis();
                 if (delay <= 0) {
                     break;
                 }
                 wait(delay);
             }
+            return numSignal;
         }
 
         public synchronized boolean isSignalled() {
-            return signalled;
+            return numSignal >= 1;
+        }
+
+        public synchronized int getNumSignal() {
+            return numSignal;
         }
     }
 
     protected Monitor mOnVideoSizeChangedCalled = new Monitor();
+    protected Monitor mOnVideoRenderingStartCalled = new Monitor();
     protected Monitor mOnBufferingUpdateCalled = new Monitor();
     protected Monitor mOnPrepareCalled = new Monitor();
     protected Monitor mOnSeekCompleteCalled = new Monitor();
@@ -84,15 +99,10 @@ public class MediaPlayerTestBase extends ActivityInstrumentationTestCase2<MediaS
     protected Context mContext;
     protected Resources mResources;
 
-    /*
-     * InstrumentationTestRunner.onStart() calls Looper.prepare(), which creates a looper
-     * for the current thread. However, since we don't actually call loop() in the test,
-     * any messages queued with that looper will never be consumed. We instantiate the player
-     * in the constructor, before setUp(), so that its constructor does not see the
-     * nonfunctional Looper.
-     */
-    protected MediaPlayer mMediaPlayer = new MediaPlayer();
-    protected MediaPlayer mMediaPlayer2 = new MediaPlayer();
+
+    protected MediaPlayer mMediaPlayer = null;
+    protected MediaPlayer mMediaPlayer2 = null;
+    protected MediaStubActivity mActivity;
 
     public MediaPlayerTestBase() {
         super(MediaStubActivity.class);
@@ -101,6 +111,19 @@ public class MediaPlayerTestBase extends ActivityInstrumentationTestCase2<MediaS
     @Override
     protected void setUp() throws Exception {
         super.setUp();
+        mActivity = getActivity();
+        getInstrumentation().waitForIdleSync();
+        try {
+            runTestOnUiThread(new Runnable() {
+                public void run() {
+                    mMediaPlayer = new MediaPlayer();
+                    mMediaPlayer2 = new MediaPlayer();
+                }
+            });
+        } catch (Throwable e) {
+            e.printStackTrace();
+            fail();
+        }
         mContext = getInstrumentation().getTargetContext();
         mResources = mContext.getResources();
     }
@@ -109,10 +132,13 @@ public class MediaPlayerTestBase extends ActivityInstrumentationTestCase2<MediaS
     protected void tearDown() throws Exception {
         if (mMediaPlayer != null) {
             mMediaPlayer.release();
+            mMediaPlayer = null;
         }
         if (mMediaPlayer2 != null) {
             mMediaPlayer2.release();
+            mMediaPlayer2 = null;
         }
+        mActivity = null;
         super.tearDown();
     }
 
@@ -121,6 +147,25 @@ public class MediaPlayerTestBase extends ActivityInstrumentationTestCase2<MediaS
         try {
             mMediaPlayer.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(),
                     afd.getLength());
+
+            // Although it is only meant for video playback, it should not
+            // cause issues for audio-only playback.
+            int videoScalingMode = sUseScaleToFitMode?
+                                    MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT
+                                  : MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING;
+
+            mMediaPlayer.setVideoScalingMode(videoScalingMode);
+        } finally {
+            afd.close();
+        }
+        sUseScaleToFitMode = !sUseScaleToFitMode;  // Alternate the scaling mode
+    }
+
+    protected void loadSubtitleSource(int resid) throws Exception {
+        AssetFileDescriptor afd = mResources.openRawResourceFd(resid);
+        try {
+            mMediaPlayer.addTimedTextSource(afd.getFileDescriptor(), afd.getStartOffset(),
+                      afd.getLength(), MediaPlayer.MEDIA_MIMETYPE_TEXT_SUBRIP);
         } finally {
             afd.close();
         }
@@ -172,14 +217,14 @@ public class MediaPlayerTestBase extends ActivityInstrumentationTestCase2<MediaS
         final float leftVolume = 0.5f;
         final float rightVolume = 0.5f;
 
-        mMediaPlayer.setDisplay(getActivity().getSurfaceHolder());
+        mMediaPlayer.setDisplay(mActivity.getSurfaceHolder());
         mMediaPlayer.setScreenOnWhilePlaying(true);
         mMediaPlayer.setOnVideoSizeChangedListener(new MediaPlayer.OnVideoSizeChangedListener() {
             @Override
             public void onVideoSizeChanged(MediaPlayer mp, int w, int h) {
                 if (w == 0 && h == 0) {
                     // A size of 0x0 can be sent initially one time when using NuPlayer.
-                    assertFalse(mOnVideoSizeChangedCalled.signalled);
+                    assertFalse(mOnVideoSizeChangedCalled.isSignalled());
                     return;
                 }
                 mOnVideoSizeChangedCalled.signal();
@@ -198,6 +243,15 @@ public class MediaPlayerTestBase extends ActivityInstrumentationTestCase2<MediaS
                 return true;
             }
         });
+        mMediaPlayer.setOnInfoListener(new MediaPlayer.OnInfoListener() {
+            @Override
+            public boolean onInfo(MediaPlayer mp, int what, int extra) {
+                if (what == MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) {
+                    mOnVideoRenderingStartCalled.signal();
+                }
+                return true;
+            }
+        });
         try {
           mMediaPlayer.prepare();
         } catch (IOException e) {
@@ -207,6 +261,7 @@ public class MediaPlayerTestBase extends ActivityInstrumentationTestCase2<MediaS
 
         mMediaPlayer.start();
         mOnVideoSizeChangedCalled.waitForSignal();
+        mOnVideoRenderingStartCalled.waitForSignal();
         mMediaPlayer.setVolume(leftVolume, rightVolume);
 
         // waiting to complete

@@ -16,11 +16,16 @@
 
 package android.provider.cts;
 
+import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.Entity;
 import android.content.EntityIterator;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.cts.util.PollingCheck;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
@@ -45,11 +50,21 @@ import android.text.format.Time;
 import android.util.Log;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 public class CalendarTest extends InstrumentationTestCase {
 
     private static final String TAG = "CalCTS";
     private static final String CTS_TEST_TYPE = "LOCAL";
+
+    // an arbitrary int used by some tests
+    private static final int SOME_ARBITRARY_INT = 143234;
+
+    // 10 sec timeout for reminder broadcast (but shouldn't usually take this long).
+    private static final int POLLING_TIMEOUT = 10000;
+
     // @formatter:off
     private static final String[] TIME_ZONES = new String[] {
             "UTC",
@@ -1439,6 +1454,65 @@ public class CalendarTest extends InstrumentationTestCase {
         removeAndVerifyCalendar(account, calendarId);
     }
 
+    /**
+     * A listener for the EVENT_REMINDER broadcast that is expected to be fired by the
+     * provider at the reminder time.
+     */
+    public class MockReminderReceiver extends BroadcastReceiver {
+        public boolean received = false;
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            final String action = intent.getAction();
+            if (action.equals(CalendarContract.ACTION_EVENT_REMINDER)) {
+                received = true;
+            }
+        }
+    }
+
+    /**
+     * Test that reminders result in the expected broadcast at reminder time.
+     */
+    public void testRemindersAlarm() throws Exception {
+        // Setup: register a mock listener for the broadcast we expect to fire at the
+        // reminder time.
+        final MockReminderReceiver reminderReceiver = new MockReminderReceiver();
+        IntentFilter filter = new IntentFilter(CalendarContract.ACTION_EVENT_REMINDER);
+        filter.addDataScheme("content");
+        getInstrumentation().getTargetContext().registerReceiver(reminderReceiver, filter);
+
+        // Clean up just in case.
+        String account = "rem_account";
+        CalendarHelper.deleteCalendarByAccount(mContentResolver, account);
+
+        // Create calendar.  Use '1' as seed as this sets the VISIBLE field to 1.
+        // The calendar must be visible for its notifications to occur.
+        long calendarId = createAndVerifyCalendar(account, 1, null);
+
+        // Create event for 15 min in the past, with a 10 min reminder, so that it will
+        // trigger immediately.
+        ContentValues eventValues;
+        int seed = 0;
+        long now = System.currentTimeMillis();
+        eventValues = EventHelper.getNewEventValues(account, seed++, calendarId, true);
+        eventValues.put(Events.DTSTART, now - DateUtils.MINUTE_IN_MILLIS * 15);
+        eventValues.put(Events.DTEND, now + DateUtils.HOUR_IN_MILLIS);
+        long eventId = createAndVerifyEvent(account, seed, calendarId, true, eventValues);
+        assertTrue(eventId >= 0);
+        ReminderHelper.addReminder(mContentResolver, eventId, 10, Reminders.METHOD_ALERT);
+
+        // Confirm that the EVENT_REMINDER broadcast was fired by the provider.
+        new PollingCheck(POLLING_TIMEOUT) {
+            @Override
+            protected boolean check() {
+                return reminderReceiver.received;
+            }
+        }.run();
+        assertTrue(reminderReceiver.received);
+
+        removeAndVerifyCalendar(account, calendarId);
+    }
+
     @MediumTest
     public void testColorWriteRequirements() {
         String account = "colw_account";
@@ -1845,6 +1919,112 @@ public class CalendarTest extends InstrumentationTestCase {
         assertEquals("Big", title);
 
         removeAndVerifyCalendar(account, calendarId);
+    }
+
+    private class CalendarEventHelper {
+
+      private long mCalendarId;
+      private String mAccount;
+      private int mSeed;
+
+      public CalendarEventHelper(String account, int seed) {
+        mAccount = account;
+        mSeed = seed;
+        ContentValues values = CalendarHelper.getNewCalendarValues(account, seed);
+        mCalendarId = createAndVerifyCalendar(account, seed++, values);
+      }
+
+      public ContentValues addEvent(String timeString, int timeZoneIndex, long duration) {
+        long event1Start = timeInMillis(timeString, timeZoneIndex);
+        ContentValues eventValues;
+        eventValues = EventHelper.getNewEventValues(mAccount, mSeed++, mCalendarId, true);
+        eventValues.put(Events.DESCRIPTION, timeString);
+        eventValues.put(Events.DTSTART, event1Start);
+        eventValues.put(Events.DTEND, event1Start + duration);
+        eventValues.put(Events.EVENT_TIMEZONE, TIME_ZONES[timeZoneIndex]);
+        long eventId = createAndVerifyEvent(mAccount, mSeed, mCalendarId, true, eventValues);
+        assertTrue(eventId >= 0);
+        return eventValues;
+      }
+    }
+
+    /**
+     * Test query to retrieve instances within a certain time interval.
+     */
+    public void testWhenByDayQuery() {
+      String account = "cser_account";
+      int seed = 0;
+
+      // Clean up just in case
+      CalendarHelper.deleteCalendarByAccount(mContentResolver, account);
+
+      // Create a calendar
+      CalendarEventHelper helper = new CalendarEventHelper(account, seed);
+
+      // Add events to the calendar--the first two in the queried range
+      List<ContentValues> eventsWithinRange = new ArrayList<ContentValues>();
+
+      ContentValues values = helper.addEvent("2009-10-01T08:00:00", 0, DateUtils.HOUR_IN_MILLIS);
+      eventsWithinRange.add(values);
+
+      values = helper.addEvent("2010-10-01T08:00:00", 0, DateUtils.HOUR_IN_MILLIS);
+      eventsWithinRange.add(values);
+
+      helper.addEvent("2011-10-01T08:00:00", 0, DateUtils.HOUR_IN_MILLIS);
+
+      // Prepare the start time and end time of the range to query
+      String startTime = "2009-01-01T00:00:00";
+      String endTime = "2011-01-01T00:00:00";
+      int julianStart = getJulianDay(startTime, 0);
+      int julianEnd = getJulianDay(endTime, 0);
+      Uri uri = Uri.withAppendedPath(
+          CalendarContract.Instances.CONTENT_BY_DAY_URI, julianStart + "/" + julianEnd);
+
+      // Query the range, sorting by event start time
+      Cursor c = mContentResolver.query(uri, null, null, null, Events.DTSTART);
+
+      // Assert that two events are returned
+      assertEquals(c.getCount(), 2);
+
+      Set<String> keySet = new HashSet();
+      keySet.add(Events.DESCRIPTION);
+      keySet.add(Events.DTSTART);
+      keySet.add(Events.DTEND);
+      keySet.add(Events.EVENT_TIMEZONE);
+
+      // Verify that the contents of those two events match the cursor results
+      verifyContentValuesAgainstCursor(eventsWithinRange, keySet, c);
+    }
+
+    private void verifyContentValuesAgainstCursor(List<ContentValues> cvs,
+        Set<String> keys, Cursor cursor) {
+      assertEquals(cursor.getCount(), cvs.size());
+
+      cursor.moveToFirst();
+
+      int i=0;
+      do {
+        ContentValues cv = cvs.get(i);
+        for (String key : keys) {
+          assertEquals(cv.get(key).toString(),
+                  cursor.getString(cursor.getColumnIndex(key)));
+        }
+        i++;
+      } while (cursor.moveToNext());
+
+      cursor.close();
+    }
+
+    private long timeInMillis(String timeString, int timeZoneIndex) {
+      Time startTime = new Time(TIME_ZONES[timeZoneIndex]);
+      startTime.parse3339(timeString);
+      return startTime.toMillis(false);
+    }
+
+    private int getJulianDay(String timeString, int timeZoneIndex) {
+      Time time = new Time(TIME_ZONES[timeZoneIndex]);
+      time.parse3339(timeString);
+      return Time.getJulianDay(time.toMillis(false), time.gmtoff);
     }
 
     /**
@@ -2937,6 +3117,139 @@ public class CalendarTest extends InstrumentationTestCase {
 
         // delete the calendar
         removeAndVerifyCalendar(account, calendarId);
+    }
+
+    /**
+     * Tests correct behavior of Calendars.isPrimary column
+     */
+    @MediumTest
+    public void testCalendarIsPrimary() {
+        String account = "ec_account";
+        int seed = 0;
+
+        // Clean up just in case
+        CalendarHelper.deleteCalendarByAccount(mContentResolver, account);
+
+        int isPrimary;
+        Cursor cursor;
+        ContentValues values = new ContentValues();
+
+        final long calendarId = createAndVerifyCalendar(account, seed++, null);
+        final Uri uri = ContentUris.withAppendedId(Calendars.CONTENT_URI, calendarId);
+
+        // verify when ownerAccount != account_name && isPrimary IS NULL
+        cursor = mContentResolver.query(uri, new String[]{Calendars.IS_PRIMARY}, null, null, null);
+        cursor.moveToFirst();
+        isPrimary = cursor.getInt(0);
+        cursor.close();
+        assertEquals("isPrimary should be 0 if ownerAccount != account_name", 0, isPrimary);
+
+        // verify when ownerAccount == account_name && isPrimary IS NULL
+        values.clear();
+        values.put(Calendars.OWNER_ACCOUNT, account);
+        mContentResolver.update(asSyncAdapter(uri, account, CTS_TEST_TYPE), values, null, null);
+        cursor = mContentResolver.query(uri, new String[]{Calendars.IS_PRIMARY}, null, null, null);
+        cursor.moveToFirst();
+        isPrimary = cursor.getInt(0);
+        cursor.close();
+        assertEquals("isPrimary should be 1 if ownerAccount == account_name", 1, isPrimary);
+
+        // verify isPrimary IS NOT NULL
+        values.clear();
+        values.put(Calendars.IS_PRIMARY, SOME_ARBITRARY_INT);
+        mContentResolver.update(uri, values, null, null);
+        cursor = mContentResolver.query(uri, new String[]{Calendars.IS_PRIMARY}, null, null, null);
+        cursor.moveToFirst();
+        isPrimary = cursor.getInt(0);
+        cursor.close();
+        assertEquals("isPrimary should be the value it was set to", SOME_ARBITRARY_INT, isPrimary);
+
+        CalendarHelper.deleteCalendarByAccount(mContentResolver, account);
+    }
+
+    /**
+     * Tests correct behavior of Events.isOrganizer column
+     */
+    @MediumTest
+    public void testEventsIsOrganizer() {
+        String account = "ec_account";
+        int seed = 0;
+
+        // Clean up just in case
+        CalendarHelper.deleteCalendarByAccount(mContentResolver, account);
+
+        int isOrganizer;
+        Cursor cursor;
+        ContentValues values = new ContentValues();
+
+        final long calendarId = createAndVerifyCalendar(account, seed++, null);
+        final long eventId = createAndVerifyEvent(account, seed, calendarId, true, null);
+        final Uri uri = ContentUris.withAppendedId(Events.CONTENT_URI, eventId);
+
+        // verify when ownerAccount != organizer && isOrganizer IS NULL
+        cursor = mContentResolver.query(uri, new String[]{Events.IS_ORGANIZER}, null, null, null);
+        cursor.moveToFirst();
+        isOrganizer = cursor.getInt(0);
+        cursor.close();
+        assertEquals("isOrganizer should be 0 if ownerAccount != organizer", 0, isOrganizer);
+
+        // verify when ownerAccount == account_name && isOrganizer IS NULL
+        values.clear();
+        values.put(Events.ORGANIZER, CalendarHelper.generateCalendarOwnerEmail(account));
+        mContentResolver.update(asSyncAdapter(uri, account, CTS_TEST_TYPE), values, null, null);
+        cursor = mContentResolver.query(uri, new String[]{Events.IS_ORGANIZER}, null, null, null);
+        cursor.moveToFirst();
+        isOrganizer = cursor.getInt(0);
+        cursor.close();
+        assertEquals("isOrganizer should be 1 if ownerAccount == organizer", 1, isOrganizer);
+
+        // verify isOrganizer IS NOT NULL
+        values.clear();
+        values.put(Events.IS_ORGANIZER, SOME_ARBITRARY_INT);
+        mContentResolver.update(uri, values, null, null);
+        cursor = mContentResolver.query(uri, new String[]{Events.IS_ORGANIZER}, null, null, null);
+        cursor.moveToFirst();
+        isOrganizer = cursor.getInt(0);
+        cursor.close();
+        assertEquals(
+                "isPrimary should be the value it was set to", SOME_ARBITRARY_INT, isOrganizer);
+        CalendarHelper.deleteCalendarByAccount(mContentResolver, account);
+    }
+
+    /**
+     * Tests correct behavior of Events.uid2445 column
+     */
+    @MediumTest
+    public void testEventsUid2445() {
+        String account = "ec_account";
+        int seed = 0;
+
+        // Clean up just in case
+        CalendarHelper.deleteCalendarByAccount(mContentResolver, account);
+
+        final String uid = "uid_123";
+        Cursor cursor;
+        ContentValues values = new ContentValues();
+        final long calendarId = createAndVerifyCalendar(account, seed++, null);
+        final long eventId = createAndVerifyEvent(account, seed, calendarId, true, null);
+        final Uri uri = ContentUris.withAppendedId(Events.CONTENT_URI, eventId);
+
+        // Verify default is null
+        cursor = mContentResolver.query(uri, new String[] {Events.UID_2445}, null, null, null);
+        cursor.moveToFirst();
+        assertTrue(cursor.isNull(0));
+        cursor.close();
+
+        // Write column value and read back
+        values.clear();
+        values.put(Events.UID_2445, uid);
+        mContentResolver.update(asSyncAdapter(uri, account, CTS_TEST_TYPE), values, null, null);
+        cursor = mContentResolver.query(uri, new String[] {Events.UID_2445}, null, null, null);
+        cursor.moveToFirst();
+        assertFalse(cursor.isNull(0));
+        assertEquals("Column uid_2445 has unexpected value.", uid, cursor.getString(0));
+
+        CalendarHelper.deleteCalendarByAccount(mContentResolver, account);
     }
 
     /**

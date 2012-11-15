@@ -54,20 +54,24 @@ class CtsBuilder(object):
 
   def __init__(self, argv):
     """Initialize the CtsBuilder from command line arguments."""
-    if not len(argv) == 6:
-      print 'Usage: %s <testRoot> <ctsOutputDir> <tempDir> <androidRootDir> <docletPath>' % argv[0]
+    if not (len(argv) == 6 or len(argv)==7):
+      print 'Usage: %s <testRoot> <ctsOutputDir> <tempDir> <androidRootDir> <docletPath> [-pts]' % argv[0]
       print ''
       print 'testRoot:       Directory under which to search for CTS tests.'
       print 'ctsOutputDir:   Directory in which the CTS repository should be created.'
       print 'tempDir:        Directory to use for storing temporary files.'
       print 'androidRootDir: Root directory of the Android source tree.'
       print 'docletPath:     Class path where the DescriptionGenerator doclet can be found.'
+      print '-pts:           generate plan for PTS.'
       sys.exit(1)
     self.test_root = sys.argv[1]
     self.out_dir = sys.argv[2]
     self.temp_dir = sys.argv[3]
     self.android_root = sys.argv[4]
     self.doclet_path = sys.argv[5]
+    self.isCts = True
+    if len(argv) ==7 and sys.argv[6] == "-pts":
+      self.isCts = False
 
     self.test_repository = os.path.join(self.out_dir, 'repository/testcases')
     self.plan_repository = os.path.join(self.out_dir, 'repository/plans')
@@ -99,6 +103,13 @@ class CtsBuilder(object):
       doc = tools.XmlFile(description)
       packages.append(doc.GetAttr('TestPackage', 'appPackageName'))
 
+    if not self.isCts: # PTS
+      plan = tools.TestPlan(packages)
+      plan.Include('.*')
+      plan.Exclude(r'android\.tests\.sigtest')
+      self.__WritePlan(plan, 'PTS')
+      return
+
     plan = tools.TestPlan(packages)
     plan.Exclude('android\.performance.*')
     self.__WritePlan(plan, 'CTS')
@@ -124,6 +135,19 @@ class CtsBuilder(object):
     plan.Include(r'android\.tests\.appsecurity')
     self.__WritePlan(plan, 'AppSecurity')
 
+    # hard-coded white list for PDK plan
+    plan.Exclude('.*')
+    plan.Include('android\.bluetooth')
+    plan.Include('android\.graphics.*')
+    plan.Include('android\.hardware')
+    plan.Include('android\.media.*')
+    plan.Include('android\.net')
+    plan.Include('android\.opengl.*')
+    plan.Include('android\.renderscript')
+    plan.Include('android\.telephony')
+    plan.Include('android\.nativemedia.*')
+    self.__WritePlan(plan, 'PDK')
+
 def LogGenerateDescription(name):
   print 'Generating test description for package %s' % name
 
@@ -141,7 +165,9 @@ def GenerateSignatureCheckDescription(test_repository):
 
 if __name__ == '__main__':
   builder = CtsBuilder(sys.argv)
-  result = builder.GenerateTestDescriptions()
-  if result != 0:
-    sys.exit(result)
+  if builder.isCts:
+    result = builder.GenerateTestDescriptions()
+    if result != 0:
+      sys.exit(result)
   builder.GenerateTestPlans()
+

@@ -29,8 +29,8 @@ public class ProgramTest extends ActivityInstrumentationTestCase2<OpenGLES20Acti
 
     private OpenGLES20ActivityOne getShaderActivity(int viewType, int viewIndex) {
         Intent intent = new Intent();
-        intent.putExtra(OpenGLES20NativeActivity.EXTRA_VIEW_TYPE, viewType);
-        intent.putExtra(OpenGLES20NativeActivity.EXTRA_VIEW_INDEX, viewIndex);
+        intent.putExtra(OpenGLES20NativeActivityOne.EXTRA_VIEW_TYPE, viewType);
+        intent.putExtra(OpenGLES20NativeActivityOne.EXTRA_VIEW_INDEX, viewIndex);
         setActivityIntent(intent);
         return getActivity();
     }

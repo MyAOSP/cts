@@ -34,6 +34,7 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.StateListDrawable;
 import android.os.Parcelable;
 import android.os.SystemClock;
+import android.os.Vibrator;
 import android.test.ActivityInstrumentationTestCase2;
 import android.test.TouchUtils;
 import android.test.UiThreadTest;
@@ -61,7 +62,7 @@ import android.view.View.OnTouchListener;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewParent;
-import android.view.WindowManagerImpl;
+import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
@@ -2543,6 +2544,16 @@ public class ViewTest extends ActivityInstrumentationTestCase2<ViewTestStubActiv
         Rect rectangle = new Rect();
         MockViewGroupParent parent = new MockViewGroupParent(mActivity);
 
+        final Rect requestedRect = new Rect();
+        MockViewGroupParent grandparent = new MockViewGroupParent(mActivity) {
+            @Override
+            public boolean requestChildRectangleOnScreen(View child, Rect rectangle,
+                    boolean immediate) {
+                requestedRect.set(rectangle);
+                return super.requestChildRectangleOnScreen(child, rectangle, immediate);
+            }
+        };
+
         // parent is null
         assertFalse(view.requestRectangleOnScreen(rectangle));
         assertFalse(view.requestRectangleOnScreen(null));
@@ -2551,16 +2562,22 @@ public class ViewTest extends ActivityInstrumentationTestCase2<ViewTestStubActiv
         assertEquals(0, rectangle.right);
         assertEquals(0, rectangle.bottom);
 
-        view.setParent(parent);
-        view.scrollTo(1, 2);
+        parent.addView(view);
+        parent.scrollTo(1, 2);
+        grandparent.addView(parent);
+
         assertFalse(parent.hasRequestChildRectangleOnScreen());
+        assertFalse(grandparent.hasRequestChildRectangleOnScreen());
 
         assertFalse(view.requestRectangleOnScreen(rectangle));
+
         assertTrue(parent.hasRequestChildRectangleOnScreen());
-        assertEquals(-1, rectangle.left);
-        assertEquals(-2, rectangle.top);
-        assertEquals(-1, rectangle.right);
-        assertEquals(-2, rectangle.bottom);
+        assertTrue(grandparent.hasRequestChildRectangleOnScreen());
+
+        assertEquals(-1, requestedRect.left);
+        assertEquals(-2, requestedRect.top);
+        assertEquals(-1, requestedRect.right);
+        assertEquals(-2, requestedRect.bottom);
 
         try {
             view.requestRectangleOnScreen(null);
@@ -2730,7 +2747,8 @@ public class ViewTest extends ActivityInstrumentationTestCase2<ViewTestStubActiv
         Rect outRect = new Rect();
         View view = new View(mActivity);
         // mAttachInfo is null
-        Display d = WindowManagerImpl.getDefault().getDefaultDisplay();
+        WindowManager wm = (WindowManager)mActivity.getSystemService(Context.WINDOW_SERVICE);
+        Display d = wm.getDefaultDisplay();
         view.getWindowVisibleDisplayFrame(outRect);
         assertEquals(0, outRect.left);
         assertEquals(0, outRect.top);
@@ -3070,6 +3088,9 @@ public class ViewTest extends ActivityInstrumentationTestCase2<ViewTestStubActiv
     }
 
     public void testHapticFeedback() {
+        Vibrator vib = (Vibrator) mActivity.getSystemService(Context.VIBRATOR_SERVICE);
+        boolean hasVibrator = vib.hasVibrator();
+
         final MockView view = (MockView) mActivity.findViewById(R.id.mock_view);
         final int LONG_PRESS = HapticFeedbackConstants.LONG_PRESS;
         final int FLAG_IGNORE_VIEW_SETTING = HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING;
@@ -3080,11 +3101,11 @@ public class ViewTest extends ActivityInstrumentationTestCase2<ViewTestStubActiv
         assertFalse(view.isHapticFeedbackEnabled());
         assertFalse(view.performHapticFeedback(LONG_PRESS));
         assertFalse(view.performHapticFeedback(LONG_PRESS, FLAG_IGNORE_GLOBAL_SETTING));
-        assertTrue(view.performHapticFeedback(LONG_PRESS, ALWAYS));
+        assertEquals(hasVibrator, view.performHapticFeedback(LONG_PRESS, ALWAYS));
 
         view.setHapticFeedbackEnabled(true);
         assertTrue(view.isHapticFeedbackEnabled());
-        assertTrue(view.performHapticFeedback(LONG_PRESS, FLAG_IGNORE_GLOBAL_SETTING));
+        assertEquals(hasVibrator, view.performHapticFeedback(LONG_PRESS, FLAG_IGNORE_GLOBAL_SETTING));
     }
 
     public void testInputConnection() throws Throwable {
@@ -3129,28 +3150,6 @@ public class ViewTest extends ActivityInstrumentationTestCase2<ViewTestStubActiv
                 assertTrue(editText.hasCalledCheckInputConnectionProxy());
             }
         });
-    }
-
-    @UiThreadTest
-    public void testLayoutDirection() {
-        View view = new View(mActivity);
-        assertEquals(View.LAYOUT_DIRECTION_INHERIT, view.getLayoutDirection());
-
-        view.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
-        assertEquals(View.LAYOUT_DIRECTION_LTR, view.getLayoutDirection());
-
-        view.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
-        assertEquals(View.LAYOUT_DIRECTION_RTL, view.getLayoutDirection());
-
-        view.setLayoutDirection(View.LAYOUT_DIRECTION_INHERIT);
-        assertEquals(View.LAYOUT_DIRECTION_INHERIT, view.getLayoutDirection());
-
-        view.setLayoutDirection(View.LAYOUT_DIRECTION_LOCALE);
-        assertEquals(View.LAYOUT_DIRECTION_LOCALE, view.getLayoutDirection());
-
-        // View.LAYOUT_DIRECTION_MASK = 0x00000003
-        view.setLayoutDirection(0xffffffff);
-        assertEquals(0x00000003, view.getLayoutDirection());
     }
 
     private static class MockEditText extends EditText {
@@ -3388,11 +3387,6 @@ public class ViewTest extends ActivityInstrumentationTestCase2<ViewTestStubActiv
         public void childAccessibilityStateChanged(View child) {
 
         }
-
-        @Override
-        public View findViewToTakeAccessibilityFocusFromHover(View child, View descendant) {
-            return null;
-        }
     }
 
     private final class OnCreateContextMenuListenerImpl implements OnCreateContextMenuListener {
@@ -3411,7 +3405,7 @@ public class ViewTest extends ActivityInstrumentationTestCase2<ViewTestStubActiv
         }
     }
 
-    private final static class MockViewGroupParent extends ViewGroup implements ViewParent {
+    private static class MockViewGroupParent extends ViewGroup implements ViewParent {
         private boolean mHasRequestChildRectangleOnScreen = false;
 
         public MockViewGroupParent(Context context) {

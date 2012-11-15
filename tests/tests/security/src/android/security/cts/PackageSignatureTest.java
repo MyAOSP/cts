@@ -69,6 +69,10 @@ public class PackageSignatureTest extends AndroidTestCase {
         wellKnownSignatures.add(getSignature(R.raw.sig_platform));
         wellKnownSignatures.add(getSignature(R.raw.sig_shared));
         wellKnownSignatures.add(getSignature(R.raw.sig_testkey));
+        wellKnownSignatures.add(getSignature(R.raw.sig_devkeys));
+        wellKnownSignatures.add(getSignature(R.raw.sig_devkeys_media));
+        wellKnownSignatures.add(getSignature(R.raw.sig_devkeys_platform));
+        wellKnownSignatures.add(getSignature(R.raw.sig_devkeys_shared));
         return wellKnownSignatures;
     }
 
@@ -89,7 +93,16 @@ public class PackageSignatureTest extends AndroidTestCase {
             "com.android.tradefed.utils.wifi",
 
             // Game used for CTS testing...
-            "com.replica.replicaisland"
+            "com.replica.replicaisland",
+
+            // CTS test
+            "android.core.tests.libcore.package.com",
+            "android.core.tests.libcore.package.dalvik",
+            "android.core.tests.libcore.package.libcore",
+            "android.core.tests.libcore.package.org",
+            "android.core.tests.libcore.package.sun",
+            "android.core.tests.libcore.package.tests"
+
             ));
 
     private boolean isWhitelistedPackage(String packageName) {
@@ -120,7 +133,14 @@ public class PackageSignatureTest extends AndroidTestCase {
 
     /**
      * Writes a package's signature to a file on the device's external storage.
-     * This method was used to generate the well known signatures used by this test.
+     * This method was used to generate the well known signatures used by
+     * this test.
+     *
+     * As an alternative, you can use openssl to create the
+     * DER encoded certificate file.
+     *
+     * openssl x509 -in $ANDROID_HOME/build/target/product/security/media.x509.pem \
+     *     -out sig_media.bin -outform DER
      */
     @SuppressWarnings("unused")
     private void writeSignature(String packageName, String fileName)

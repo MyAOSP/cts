@@ -57,6 +57,8 @@ public class AbsListViewTest extends ActivityInstrumentationTestCase2<ListViewSt
         "This", "is", "short", "!",
     };
     private final String[] mCountryList = new String[] {
+        "Argentina", "Australia", "China", "France", "Germany", "Italy", "Japan", "United States",
+        "Argentina", "Australia", "China", "France", "Germany", "Italy", "Japan", "United States",
         "Argentina", "Australia", "China", "France", "Germany", "Italy", "Japan", "United States"
     };
 
@@ -534,6 +536,7 @@ public class AbsListViewTest extends ActivityInstrumentationTestCase2<ListViewSt
         assertEquals(0, listener.getPosition());
         assertEquals(0, listener.getID());
 
+        mInstrumentation.waitForIdleSync();
         TouchUtils.longClickView(this, v);
 
         new PollingCheck() {

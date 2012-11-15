@@ -275,6 +275,19 @@ class TestPackageResult  extends AbstractXmlPullParser {
     }
 
     /**
+     * report performance result
+     * @param test
+     * @param status
+     * @param perf
+     */
+    public void reportPerformanceResult(TestIdentifier test, CtsTestStatus status, String summary, String details) {
+        Test result = findTest(test);
+        result.setResultStatus(status);
+        result.setMessage(summary);
+        result.setDetails(details);
+    }
+
+    /**
      * Report that the given test has completed.
      *
      * @param test

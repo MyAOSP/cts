@@ -20,24 +20,20 @@ import android.opengl.GLES20;
 import android.test.ActivityInstrumentationTestCase2;
 
 public class NativeAttachShaderTest
-        extends ActivityInstrumentationTestCase2<OpenGLES20NativeActivity> {
+        extends ActivityInstrumentationTestCase2<OpenGLES20NativeActivityOne> {
 
-    public NativeAttachShaderTest(Class<OpenGLES20NativeActivity> activityClass) {
-        super(activityClass);
-    }
-
-    private OpenGLES20NativeActivity mActivity;
+    private OpenGLES20NativeActivityOne mActivity;
 
     public NativeAttachShaderTest() {
-        super(OpenGLES20NativeActivity.class);
+        super(OpenGLES20NativeActivityOne.class);
     }
 
-    private OpenGLES20NativeActivity getShaderActivity(int viewType, int viewIndex) {
+    private OpenGLES20NativeActivityOne getShaderActivity(int viewType, int viewIndex) {
         Intent intent = new Intent();
-        intent.putExtra(OpenGLES20NativeActivity.EXTRA_VIEW_TYPE, viewType);
-        intent.putExtra(OpenGLES20NativeActivity.EXTRA_VIEW_INDEX, viewIndex);
+        intent.putExtra(OpenGLES20NativeActivityOne.EXTRA_VIEW_TYPE, viewType);
+        intent.putExtra(OpenGLES20NativeActivityOne.EXTRA_VIEW_INDEX, viewIndex);
         setActivityIntent(intent);
-        OpenGLES20NativeActivity activity = getActivity();
+        OpenGLES20NativeActivityOne activity = getActivity();
         assertTrue(activity.waitForFrameDrawn());
         return activity;
     }
@@ -102,15 +98,50 @@ public class NativeAttachShaderTest
         assertEquals(GLES20.GL_NO_ERROR, error);
     }
 
+/* only one frag shader can be attached
     public void test_glAttachShaders_emptyfragshader_emptyfragshader() throws Throwable {
         mActivity = getShaderActivity(Constants.SHADER, 5);
         int error = mActivity.mRenderer.mAttachShaderError;
         assertTrue(GLES20.GL_NO_ERROR != error);
     }
-
+*/
     public void test_glAttachShaders_emptyfragshader_emptyvertexshader() throws Throwable {
         mActivity = getShaderActivity(Constants.SHADER, 6);
         int error = mActivity.mRenderer.mAttachShaderError;;
+        assertEquals(GLES20.GL_NO_ERROR, error);
+    }
+
+/* only one vertex shader can be attached
+    public void test_glAttachShaders_emptyvertexshader_emptyvertexshader() throws Throwable {
+        mActivity = getShaderActivity(Constants.SHADER, 7);
+        int error = mActivity.mRenderer.mAttachShaderError;
+        assertTrue(GLES20.GL_NO_ERROR != error);
+    }
+*/
+    public void test_glAttachShaders_programobject_attach_fragshaderobject() throws Throwable {
+        mActivity = getShaderActivity(Constants.SHADER, 8);
+        int error = mActivity.mRenderer.mAttachShaderError;
+        // The operations are valid
+        assertEquals(GLES20.GL_NO_ERROR, error);
+    }
+
+    public void test_glAttachShaders_invalidshader_attach_valid_handle() throws Throwable{
+        mActivity = getShaderActivity(Constants.SHADER, 9);
+        int error = mActivity.mRenderer.mAttachShaderError;
+        assertTrue(GLES20.GL_NO_ERROR != error);
+    }
+
+    public void test_glAttachShaders_successfulcompile_attach_frag() throws Throwable {
+        mActivity = getShaderActivity(Constants.SHADER, 10);
+        int shaderCount = mActivity.mRenderer.mShaderCount;
+        assertEquals(1,shaderCount);
+        int error = mActivity.mRenderer.mAttachShaderError;
+        assertEquals(GLES20.GL_NO_ERROR, error);
+    }
+
+    public void test_glAttachShaders_successfulcompile_attach_vert() throws Throwable {
+        mActivity = getShaderActivity(Constants.SHADER, 11);
+        int error = mActivity.mRenderer.mAttachShaderError;
         assertEquals(GLES20.GL_NO_ERROR, error);
     }
 }

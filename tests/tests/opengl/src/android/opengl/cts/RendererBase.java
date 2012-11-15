@@ -30,6 +30,7 @@ public abstract class RendererBase implements GLSurfaceView.Renderer {
     FloatBuffer floatBuffer;
     int mProgram;
     int maPositionHandle;
+    float[] mColorOne = new float[4];
 
     int[] mShaderCount = null;
     int mError;

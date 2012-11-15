@@ -296,8 +296,32 @@
     <string name="ca_focus_modes_label">Focus Modes</string>
     <string name="ca_info">This test checks the image quality of the camera of this device. It requires a MacBeth 4x6 color checker. With an ADK board and a lamp connected to it on the Relay 1 port, all tests can be run automatically. Without the ADK board, all the tests except the Auto Exposure Lock Test can be run automatically and the Auto Exposure Lock Test will require users to turn on/off a lamp according to the instruction given. </string>
 
-    <!-- Strings for Camera Formats -->
+    <!-- Strings for Camera Orientation -->
+    <string name="camera_orientation">Camera Orientation</string>
+    <string name="co_info">This test verifies the orientation capabilities of
+    camera preview and capture.\n - The left view shows a preview window rotated
+    clockwise by a given magnitude of degrees.\n - The right view, after taking
+    a photo, shows the captured image.\n - For each camera and orientation, both
+    the left and right views should appear rotated clockwise by the amount of
+    degrees specified. Choose \"Pass\" if this is the case. Otherwise, choose
+    \"Fail\".\n - For front-facing cameras, the test will horizontally mirror
+    the captured image prior to rotation, in attempt to make the left and right
+    views appear the same.\n - The physical orientation of the device does not
+    matter.\n - Read the message above the \"Take Photo\" button for
+    step-by-step instructions.
+    </string>
+    <string name="co_preview_label">Camera preview</string>
+    <string name="co_format_label">Oriented photo</string>
+    <string name="co_camera_label">Camera:</string>
+    <string name="co_orientation_label">Orientation</string>
+    <string name="co_orientation_direction_label">clockwise</string>
+    <string name="co_instruction_heading_label">Instruction:</string>
+    <string name="co_instruction_text_photo_label">Take a photo</string>
+    <string name="co_instruction_text_passfail_label">Choose \"Pass\" if the left view is oriented the same as the right view. Otherwise, choose \"Fail\".</string>
+    <string name="co_instruction_text_extra_label">(mirrored horizontally prior to rotation, since camera is front-facing)</string>
+    <string name="co_photo_button_caption">Take Photo</string>
 
+    <!-- Strings for Camera Formats -->
     <string name="camera_format">Camera Formats</string>
     <string name="cf_info">This test checks that all the supported
     output formats for camera preview callbacks work correctly, and

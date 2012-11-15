@@ -33,10 +33,12 @@ import android.location.GpsStatus.Listener;
 import android.os.Bundle;
 import android.os.HandlerThread;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.test.InstrumentationTestCase;
 
 import java.util.List;
+import java.lang.Thread;
 
 /**
  * Requires the permissions
@@ -51,6 +53,8 @@ public class LocationManagerTest extends InstrumentationTestCase {
     private static final String TEST_MOCK_PROVIDER_NAME = "test_provider";
 
     private static final String UNKNOWN_PROVIDER_NAME = "unknown_provider";
+
+    private static final String FUSED_PROVIDER_NAME = "fused";
 
     private LocationManager mManager;
 
@@ -452,7 +456,7 @@ public class LocationManagerTest extends InstrumentationTestCase {
         i.setAction("android.location.cts.TEST_GET_GPS_STATUS_ACTION");
         PendingIntent pi = PendingIntent.getBroadcast(mContext, 0, i, PendingIntent.FLAG_ONE_SHOT);
 
-        mManager.addProximityAlert(0, 0, 0, 5000, pi);
+        mManager.addProximityAlert(0, 0, 1.0f, 5000, pi);
         mManager.removeProximityAlert(pi);
     }
 
@@ -587,28 +591,58 @@ public class LocationManagerTest extends InstrumentationTestCase {
      * Tests basic proximity alert when entering proximity
      */
     public void testEnterProximity() throws Exception {
+        // need to mock the fused location provider for proximity tests
+        mockFusedLocation();
+
         doTestEnterProximity(10000);
+
+        unmockFusedLocation();
     }
 
     /**
      * Tests proximity alert when entering proximity, with no expiration
      */
     public void testEnterProximity_noexpire() throws Exception {
+        // need to mock the fused location provider for proximity tests
+        mockFusedLocation();
+
         doTestEnterProximity(-1);
+
+        unmockFusedLocation();
     }
 
     /**
      * Tests basic proximity alert when exiting proximity
      */
     public void testExitProximity() throws Exception {
+        // need to mock the fused location provider for proximity tests
+        mockFusedLocation();
+
         // first do enter proximity scenario
         doTestEnterProximity(-1);
 
         // now update to trigger exit proximity proximity
         mIntentReceiver.clearReceivedIntents();
-        updateLocation(20, 20);
+        updateLocationAndWait(FUSED_PROVIDER_NAME, 20, 20);
         waitForReceiveBroadcast();
         assertProximityType(false);
+
+        unmockFusedLocation();
+    }
+
+    /**
+     * Tests basic proximity alert when initially within proximity
+     */
+    public void testInitiallyWithinProximity() throws Exception {
+        // need to mock the fused location provider for proximity tests
+        mockFusedLocation();
+
+        updateLocationAndWait(FUSED_PROVIDER_NAME, 0, 0);
+        registerProximityListener(0, 0, 1000, 10000);
+        waitForReceiveBroadcast();
+        assertProximityType(true);
+
+        unmockFusedLocation();
     }
 
     /**
@@ -619,11 +653,34 @@ public class LocationManagerTest extends InstrumentationTestCase {
      */
     private void doTestEnterProximity(long expiration) throws Exception {
         // update location to outside proximity range
-        updateLocation(30, 30);
+        updateLocationAndWait(FUSED_PROVIDER_NAME, 30, 30);
         registerProximityListener(0, 0, 1000, expiration);
-        updateLocation(0, 0);
+        updateLocationAndWait(FUSED_PROVIDER_NAME, 0, 0);
         waitForReceiveBroadcast();
         assertProximityType(true);
+    }
+
+
+    private void updateLocationAndWait(String providerName, double latitude, double longitude)
+            throws InterruptedException {
+        // Register a listener for the location we are about to set.
+        MockLocationListener listener = new MockLocationListener();
+        HandlerThread handlerThread = new HandlerThread("updateLocationAndWait");
+        handlerThread.start();
+        mManager.requestLocationUpdates(providerName, 0, 0, listener, handlerThread.getLooper());
+
+        // Set the location.
+        updateLocation(providerName, latitude, longitude);
+
+        // Make sure we received the location, and it is the right one.
+        assertTrue(listener.hasCalledOnLocationChanged(TEST_TIME_OUT));
+        Location location = listener.getLocation();
+        assertEquals(providerName, location.getProvider());
+        assertEquals(latitude, location.getLatitude());
+        assertEquals(longitude, location.getLongitude());
+
+        // Remove the listener.
+        mManager.removeUpdates(listener);
     }
 
     private void registerIntentReceiver() {
@@ -663,7 +720,9 @@ public class LocationManagerTest extends InstrumentationTestCase {
      *            if exit expected
      */
     private void assertProximityType(boolean expectedEnterProximity) throws Exception {
-        boolean proximityTest = mIntentReceiver.getLastReceivedIntent().getBooleanExtra(
+        Intent intent = mIntentReceiver.getLastReceivedIntent();
+        assertNotNull("Did not receive any intent", intent);
+        boolean proximityTest = intent.getBooleanExtra(
                 LocationManager.KEY_PROXIMITY_ENTERING, !expectedEnterProximity);
         assertEquals("proximity alert not set to expected enter proximity value",
                 expectedEnterProximity, proximityTest);
@@ -674,13 +733,22 @@ public class LocationManagerTest extends InstrumentationTestCase {
         Location location = new Location(providerName);
         location.setLatitude(latitude);
         location.setLongitude(longitude);
-
+        location.setAccuracy(1.0f);
         location.setTime(java.lang.System.currentTimeMillis());
+        location.setElapsedRealtimeNanos(SystemClock.elapsedRealtimeNanos());
         mManager.setTestProviderLocation(providerName, location);
     }
 
     private void updateLocation(final double latitude, final double longitude) {
         updateLocation(TEST_MOCK_PROVIDER_NAME, latitude, longitude);
+    }
+
+    private void mockFusedLocation() {
+        addTestProvider(FUSED_PROVIDER_NAME);
+    }
+
+    private void unmockFusedLocation() {
+        mManager.removeTestProvider(FUSED_PROVIDER_NAME);
     }
 
     /**

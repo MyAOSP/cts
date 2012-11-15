@@ -26,7 +26,7 @@ import android.util.Log;
 import android.util.TimeFormatException;
 
 public class TimeTest extends AndroidTestCase {
-
+    private static final String TAG = "TimeTest";
     public void testConstructor() {
         Time time = new Time();
         new Time(Time.getCurrentTimezone());
@@ -122,6 +122,49 @@ public class TimeTest extends AndroidTestCase {
             fail("should throw exception");
         } catch (TimeFormatException e) {
             // expected
+        }
+    }
+
+    public void testParseNull() {
+        Time t = new Time();
+        try {
+            t.parse(null);
+            fail();
+        } catch (NullPointerException expected) {
+        }
+
+        try {
+            t.parse3339(null);
+            fail();
+        } catch (NullPointerException expected) {
+        }
+    }
+
+    // http://code.google.com/p/android/issues/detail?id=16002
+    // We'd leak one JNI global reference each time parsing failed.
+    // This would cause a crash when we filled the global reference table.
+    public void testBug16002() {
+        Time t = new Time();
+        for (int i = 0; i < 8192; ++i) {
+            try {
+                t.parse3339("xxx");
+                fail();
+            } catch (TimeFormatException expected) {
+            }
+        }
+    }
+
+    // http://code.google.com/p/android/issues/detail?id=22225
+    // We'd leak one JNI global reference each time parsing failed.
+    // This would cause a crash when we filled the global reference table.
+    public void testBug22225() {
+        Time t = new Time();
+        for (int i = 0; i < 8192; ++i) {
+            try {
+                t.parse("xxx");
+                fail();
+            } catch (TimeFormatException expected) {
+            }
         }
     }
 
@@ -483,10 +526,14 @@ public class TimeTest extends AndroidTestCase {
 
     public void testSetToNow0() throws Exception {
         Time t = new Time(Time.TIMEZONE_UTC);
-        long currentTime = System.currentTimeMillis();
+        // Time has resolution of 1 second. So round-off to second and compare
+        long currentTime = System.currentTimeMillis() / 1000;
         t.setToNow();
-        long time = t.toMillis(false);
-        assertTrue(Math.abs(currentTime - time) < 999);
+        long time = t.toMillis(false) / 1000;
+        // 1 sec of delta can happen
+        if (Math.abs(currentTime - time) > 1) {
+            fail("currentTime " + currentTime + " time " + time);
+        }
     }
 
     public void testMillis0() throws Exception {
@@ -626,7 +673,7 @@ public class TimeTest extends AndroidTestCase {
                 time.timezone = mTimeZones[zoneIndex];
                 long millis = time.normalize(true);
                 if (zoneIndex == 0) {
-                    Log.i("TimeTest", time.format("%B %d, %Y"));
+                    Log.i(TAG, time.format("%B %d, %Y"));
                 }
 
                 // This is the Julian day for 12am for this day of the year
@@ -665,7 +712,7 @@ public class TimeTest extends AndroidTestCase {
                 time.timezone = mTimeZones[zoneIndex];
                 long millis = time.normalize(true);
                 if (zoneIndex == 0) {
-                    Log.i("TimeTest", time.format("%B %d, %Y"));
+                    Log.i(TAG, time.format("%B %d, %Y"));
                 }
                 int julianDay = Time.getJulianDay(millis, time.gmtoff);
 
@@ -684,7 +731,7 @@ public class TimeTest extends AndroidTestCase {
                 millis = time.toMillis(false);
                 int day = Time.getJulianDay(millis, time.gmtoff);
                 if (day != julianDay) {
-                    Log.i("TimeTest", "Error: gmtoff " + (time.gmtoff / 3600.0) + " day "
+                    Log.i(TAG, "Error: gmtoff " + (time.gmtoff / 3600.0) + " day "
                             + julianDay + " millis " + millis + " " + time.format("%B %d, %Y")
                             + " " + time.timezone);
                 }

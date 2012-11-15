@@ -89,6 +89,7 @@ public class OpenGLES20ActivityOne extends Activity {
         public OpenGLES20View(Context context, int type, int index, CountDownLatch latch) {
             super(context);
             setEGLContextClientVersion(2);
+
             if (type == Constants.SHADER) {
                 if (index == 1) {
                     mRenderer = new RendererOneShaderTest(latch);
@@ -110,6 +111,10 @@ public class OpenGLES20ActivityOne extends Activity {
                     mRenderer = new RendererNineShaderTest(latch);
                 } else if(index == 10) {
                     mRenderer = new RendererTenShaderTest(latch);
+                } else if(index == 11) {
+                    mRenderer = new RendererElevenShaderTest(latch);
+                } else if(index == 12) {
+                    mRenderer = new RendererTwelveShaderTest(latch);
                 } else {
                     throw new RuntimeException();
                 }
